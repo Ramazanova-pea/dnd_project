@@ -77,11 +77,9 @@ flutter:
 
   # Оптимизация размера приложения
   assets:
-    - assets/images/
-    - assets/icons/
-    - assets/animations/
-    - assets/sounds/
-    - assets/translations/
+    - assets/images/logo/
+    - assets/images/decorations/
+    - assets/fonts/
 
   fonts:
     - family: Medieval

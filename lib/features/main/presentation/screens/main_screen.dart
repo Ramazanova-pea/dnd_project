@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class MainScreen extends StatelessWidget {
   final Widget child;
@@ -73,7 +74,7 @@ class MainScreen extends StatelessWidget {
   }
 
   int _getCurrentIndex(BuildContext context) {
-    final location = GoRouterState.of(context).location;
+    final location = GoRouterState.of(context).uri.toString();
 
     if (location.contains('/home/characters')) return 0;
     if (location.contains('/home/reference')) return 1;
