@@ -17,9 +17,8 @@ class SecureStorageDataSource {
     accessibility: KeychainAccessibility.first_unlock_this_device, // Доступ после первого разблокирования устройства
   );
 
-  static const LinuxOptions _linuxOptions = LinuxOptions(
-    useSessionKeyring: true, // Использование session keyring на Linux
-  );
+  // LinuxOptions не требует специфических параметров в текущей версии flutter_secure_storage
+  static const LinuxOptions _linuxOptions = LinuxOptions();
 
   static const MacOsOptions _macOsOptions = MacOsOptions(
     accessibility: KeychainAccessibility.first_unlock_this_device,
