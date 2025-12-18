@@ -14,10 +14,14 @@ class AuthRemoteDataSource {
       throw Exception('Неверные учетные данные');
     }
 
+    // Имитация получения токена от сервера
+    final token = 'token_${DateTime.now().millisecondsSinceEpoch}_${email.hashCode}';
+
     return <String, dynamic>{
       'id': 'user_${DateTime.now().millisecondsSinceEpoch}',
       'email': email,
       'name': email.split('@').first,
+      'token': token, // Токен для сохранения в Secure Storage
     };
   }
 
@@ -39,10 +43,14 @@ class AuthRemoteDataSource {
       throw Exception('Пароль должен быть не менее 6 символов');
     }
 
+    // Имитация получения токена от сервера
+    final token = 'token_${DateTime.now().millisecondsSinceEpoch}_${email.hashCode}';
+
     return <String, dynamic>{
       'id': 'user_${DateTime.now().millisecondsSinceEpoch}',
       'email': email,
       'name': username,
+      'token': token, // Токен для сохранения в Secure Storage
     };
   }
 

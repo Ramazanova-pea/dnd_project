@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dnd_project/data/datasources/auth_remote_data_source.dart';
 import 'package:dnd_project/data/datasources/local/auth_local_data_source.dart';
 import 'package:dnd_project/data/datasources/local/shared_preferences_data_source.dart';
+import 'package:dnd_project/data/datasources/local/secure_storage_data_source.dart';
 import 'package:dnd_project/data/repositories/auth_repository_impl.dart';
 import 'package:dnd_project/domain/models/user.dart';
 import 'package:dnd_project/domain/repositories/auth_repository.dart';
@@ -34,10 +35,21 @@ final sharedPreferencesDataSourceProvider =
   return SharedPreferencesDataSource();
 });
 
+/// Провайдер Flutter Secure Storage DataSource
+final secureStorageDataSourceProvider =
+    Provider<SecureStorageDataSource>((ref) {
+  return SecureStorageDataSource();
+});
+
 /// Провайдер локального источника данных для авторизации
+/// Использует SharedPreferences для нечувствительных данных и Secure Storage для токена
 final authLocalDataSourceProvider = Provider<AuthLocalDataSource>((ref) {
   final sharedPrefs = ref.read(sharedPreferencesDataSourceProvider);
-  return AuthLocalDataSource(sharedPrefs: sharedPrefs);
+  final secureStorage = ref.read(secureStorageDataSourceProvider);
+  return AuthLocalDataSource(
+    sharedPrefs: sharedPrefs,
+    secureStorage: secureStorage,
+  );
 });
 
 /// Провайдер репозитория авторизации (слой Data, реализующий Domain-интерфейс).
