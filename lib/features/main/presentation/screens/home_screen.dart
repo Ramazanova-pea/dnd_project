@@ -75,6 +75,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       'route': '/home/campaigns/create',
     },
     {
+      'icon': Icons.chat_bubble_outline_rounded,
+      'title': 'Чаты',
+      'color': AppColors.infoBlue,
+      'route': '/home/chats',
+    },
+    {
       'icon': Icons.menu_book_rounded,
       'title': 'Справочник',
       'color': AppColors.darkBrown,
@@ -402,6 +408,146 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildChatsCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        color: AppColors.parchment.withOpacity(0.9),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => context.go('/home/chats'),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.infoBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.infoBlue.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.chat_bubble_rounded,
+                    color: AppColors.infoBlue,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Чаты',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.darkBrown,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Общение с игроками и ведущими',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 13,
+                          color: AppColors.woodBrown,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: AppColors.woodBrown,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        color: AppColors.parchment.withOpacity(0.9),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => context.go('/home/settings_game'),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.warningOrange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.warningOrange.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.public_rounded,
+                    color: AppColors.warningOrange,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Игровые миры',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.darkBrown,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Сеттинги, миры и NPC для ваших кампаний',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 13,
+                          color: AppColors.woodBrown,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: AppColors.woodBrown,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -863,9 +1009,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           const SizedBox(height: 24),
                           _buildQuickActions(),
                           const SizedBox(height: 24),
+                          _buildChatsCard(),
+                          const SizedBox(height: 24),
                           _buildRecentCharacters(),
                           const SizedBox(height: 24),
                           _buildRecentCampaigns(),
+                          const SizedBox(height: 24),
+                          _buildSettingsCard(),
                           const SizedBox(height: 32),
                         ],
                       );
