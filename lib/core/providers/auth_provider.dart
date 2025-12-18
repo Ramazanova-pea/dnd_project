@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:dnd_project/data/datasources/auth_remote_data_source.dart';
+import 'package:dnd_project/data/datasources/local/auth_local_data_source.dart';
+import 'package:dnd_project/data/datasources/local/shared_preferences_data_source.dart';
 import 'package:dnd_project/data/repositories/auth_repository_impl.dart';
 import 'package:dnd_project/domain/models/user.dart';
 import 'package:dnd_project/domain/repositories/auth_repository.dart';
@@ -26,17 +28,49 @@ class AuthState {
   }
 }
 
+/// Провайдер SharedPreferences DataSource
+final sharedPreferencesDataSourceProvider =
+    Provider<SharedPreferencesDataSource>((ref) {
+  return SharedPreferencesDataSource();
+});
+
+/// Провайдер локального источника данных для авторизации
+final authLocalDataSourceProvider = Provider<AuthLocalDataSource>((ref) {
+  final sharedPrefs = ref.read(sharedPreferencesDataSourceProvider);
+  return AuthLocalDataSource(sharedPrefs: sharedPrefs);
+});
+
 /// Провайдер репозитория авторизации (слой Data, реализующий Domain-интерфейс).
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final remoteDataSource = AuthRemoteDataSource();
-  return AuthRepositoryImpl(remoteDataSource: remoteDataSource);
+  final localDataSource = ref.read(authLocalDataSourceProvider);
+  return AuthRepositoryImpl(
+    remoteDataSource: remoteDataSource,
+    localDataSource: localDataSource,
+  );
 });
 
 /// StateNotifier, который использует [AuthRepository] и управляет состоянием авторизации.
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier(this._repository) : super(const AuthState());
+  AuthNotifier(this._repository) : super(const AuthState()) {
+    // При инициализации проверяем сохранённую сессию
+    _loadSavedSession();
+  }
 
   final AuthRepository _repository;
+
+  /// Загрузка сохранённой сессии при старте приложения
+  Future<void> _loadSavedSession() async {
+    if (_repository is AuthRepositoryImpl) {
+      final savedUser = await (_repository as AuthRepositoryImpl).getSavedSession();
+      if (savedUser != null) {
+        state = AuthState(
+          isAuthenticated: true,
+          user: savedUser,
+        );
+      }
+    }
+  }
 
   Future<bool> login(String email, String password) async {
     try {

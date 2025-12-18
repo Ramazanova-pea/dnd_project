@@ -2,8 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '/app/router/go_router.dart';
+import '/core/providers/storage_providers.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Инициализация локальных хранилищ при старте приложения
+  // Hive будет инициализирован через провайдер при первом использовании
+  
   runApp(
     ProviderScope(
       child: MyApp(),

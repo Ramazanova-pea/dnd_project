@@ -1,30 +1,41 @@
 import 'package:dnd_project/data/datasources/auth_remote_data_source.dart';
+import 'package:dnd_project/data/datasources/local/auth_local_data_source.dart';
 import 'package:dnd_project/domain/models/user.dart';
 import 'package:dnd_project/domain/repositories/auth_repository.dart';
 
 /// Реализация [AuthRepository], инкапсулирующая работу с источниками данных.
+/// Использует SharedPreferences для сохранения сессии пользователя между запусками.
 class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl({
     required AuthRemoteDataSource remoteDataSource,
-  }) : _remoteDataSource = remoteDataSource;
+    required AuthLocalDataSource localDataSource,
+  })  : _remoteDataSource = remoteDataSource,
+        _localDataSource = localDataSource;
 
   final AuthRemoteDataSource _remoteDataSource;
+  final AuthLocalDataSource _localDataSource;
 
   @override
   Future<User> login({
     required String email,
     required String password,
   }) async {
+    // Выполняем авторизацию через удалённый источник
     final data = await _remoteDataSource.login(
       email: email,
       password: password,
     );
 
-    return User(
+    final user = User(
       id: data['id'] as String,
       email: data['email'] as String,
       name: data['name'] as String,
     );
+
+    // Сохраняем сессию в локальное хранилище (SharedPreferences)
+    await _localDataSource.saveUserSession(user);
+
+    return user;
   }
 
   @override
@@ -33,22 +44,36 @@ class AuthRepositoryImpl implements AuthRepository {
     required String email,
     required String password,
   }) async {
+    // Выполняем регистрацию через удалённый источник
     final data = await _remoteDataSource.register(
       username: username,
       email: email,
       password: password,
     );
 
-    return User(
+    final user = User(
       id: data['id'] as String,
       email: data['email'] as String,
       name: data['name'] as String,
     );
+
+    // Сохраняем сессию в локальное хранилище (SharedPreferences)
+    await _localDataSource.saveUserSession(user);
+
+    return user;
   }
 
   @override
-  Future<void> logout() {
-    return _remoteDataSource.logout();
+  Future<void> logout() async {
+    // Очищаем локальную сессию
+    await _localDataSource.clearUserSession();
+    // Выполняем логаут на сервере (если требуется)
+    await _remoteDataSource.logout();
+  }
+
+  /// Получение сохранённой сессии пользователя (для восстановления после перезапуска)
+  Future<User?> getSavedSession() async {
+    return await _localDataSource.getSavedUserSession();
   }
 }
 
