@@ -62,23 +62,24 @@ GoRouter createRouter(WidgetRef ref) {
     debugLogDiagnostics: true,
     initialLocation: '/splash',
 
-    // Редиректы для защиты маршрутов
-    redirect: (context, state) {
-      final isLoggedIn = ref.read(authProvider).isAuthenticated;
-      final isAuthPath = _isAuthPath(state.location);
-
-      // Если пользователь не авторизован и пытается попасть на защищенный маршрут
-      if (!isLoggedIn && !isAuthPath) {
-        return '/login';
-      }
-
-      // Если пользователь авторизован и пытается попасть на auth-маршруты
-      if (isLoggedIn && isAuthPath) {
-        return '/home';
-      }
-
-      return null;
-    },
+    // // Редиректы для защиты маршрутов
+    // redirect: (context, state) {
+    //   final isLoggedIn = ref.read(authProvider).isAuthenticated;
+    //   final location = state.uri.toString();
+    //   final isAuthPath = _isAuthPath(location);
+    //
+    //   // Если пользователь не авторизован и пытается попасть на защищенный маршрут
+    //   if (!isLoggedIn && !isAuthPath) {
+    //     return '/login';
+    //   }
+    //
+    //   // Если пользователь авторизован и пытается попасть на auth-маршруты
+    //   if (isLoggedIn && isAuthPath) {
+    //     return '/home';
+    //   }
+    //
+    //   return null;
+    // },
 
     routes: [
       // ========== PUBLIC ROUTES (без авторизации) ==========

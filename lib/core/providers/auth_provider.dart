@@ -1,45 +1,98 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:dnd_project/data/datasources/auth_remote_data_source.dart';
+import 'package:dnd_project/data/repositories/auth_repository_impl.dart';
+import 'package:dnd_project/domain/models/user.dart';
+import 'package:dnd_project/domain/repositories/auth_repository.dart';
+
+/// Состояние авторизации для UI-слоя.
 class AuthState {
   final bool isAuthenticated;
-  final String? userId;
-  final String? username;
+  final User? user;
 
-  AuthState({
-    required this.isAuthenticated,
-    this.userId,
-    this.username,
+  const AuthState({
+    this.isAuthenticated = false,
+    this.user,
   });
 
   AuthState copyWith({
     bool? isAuthenticated,
-    String? userId,
-    String? username,
+    User? user,
   }) {
     return AuthState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
-      userId: userId ?? this.userId,
-      username: username ?? this.username,
+      user: user ?? this.user,
     );
   }
 }
 
+/// Провайдер репозитория авторизации (слой Data, реализующий Domain-интерфейс).
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  final remoteDataSource = AuthRemoteDataSource();
+  return AuthRepositoryImpl(remoteDataSource: remoteDataSource);
+});
+
+/// StateNotifier, который использует [AuthRepository] и управляет состоянием авторизации.
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier() : super(AuthState(isAuthenticated: false));
+  AuthNotifier(this._repository) : super(const AuthState());
 
-  void login(String userId, String username) {
-    state = state.copyWith(
-      isAuthenticated: true,
-      userId: userId,
-      username: username,
-    );
+  final AuthRepository _repository;
+
+  Future<bool> login(String email, String password) async {
+    try {
+      final user = await _repository.login(email: email, password: password);
+      state = AuthState(
+        isAuthenticated: true,
+        user: user,
+      );
+      return true;
+    } catch (_) {
+      rethrow;
+    }
   }
 
-  void logout() {
-    state = AuthState(isAuthenticated: false);
+  Future<bool> register({
+    required String username,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final user = await _repository.register(
+        username: username,
+        email: email,
+        password: password,
+      );
+      state = AuthState(
+        isAuthenticated: true,
+        user: user,
+      );
+      return true;
+    } catch (_) {
+      rethrow;
+    }
+  }
+
+  Future<void> logout() async {
+    await _repository.logout();
+    state = const AuthState();
+  }
+
+  void updateProfile(String userName, String email) {
+    final currentUser = state.user;
+    if (currentUser == null) return;
+
+    final updatedUser = User(
+      id: currentUser.id,
+      email: email,
+      name: userName,
+    );
+
+    state = state.copyWith(user: updatedUser);
   }
 }
 
-final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
-      (ref) => AuthNotifier(),
-);
+/// Глобальный провайдер авторизации, доступный во всем приложении.
+final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+  final repository = ref.read(authRepositoryProvider);
+  return AuthNotifier(repository);
+});

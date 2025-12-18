@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dnd_project/core/constants/app_colors.dart';
-import 'package:dnd_project/features/auth/presentation/providers/auth_provider.dart';
+import 'package:dnd_project/core/providers/auth_provider.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -80,14 +80,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
             password: _passwordController.text,
           );
 
-      if (result.success) {
+      if (result) {
         if (context.mounted) {
           context.go('/home');
         }
       } else {
         setState(() {
           _isRegisterError = true;
-          _errorMessage = result.message ?? 'Ошибка регистрации';
+          _errorMessage = 'Ошибка регистрации';
           _isLoading = false;
         });
       }

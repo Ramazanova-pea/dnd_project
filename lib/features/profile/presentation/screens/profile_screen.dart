@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dnd_project/core/constants/app_colors.dart';
-import 'package:dnd_project/features/auth/presentation/providers/auth_provider.dart';
+import 'package:dnd_project/core/providers/auth_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -50,9 +50,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
-    final username = authState.username ?? 'Искатель приключений';
-    final email = authState.email ?? 'email@example.com';
-    final isGuest = authState.isGuest;
+    final username = authState.user?.name ?? 'Искатель приключений';
+    final email = authState.user?.email ?? 'email@example.com';
 
     return Scaffold(
       backgroundColor: AppColors.parchment.withOpacity(0.97),
@@ -88,7 +87,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 // Карточка профиля
-                _buildProfileCard(username, email, isGuest),
+                _buildProfileCard(username, email, false),
 
                 const SizedBox(height: 24),
 

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dnd_project/core/constants/app_colors.dart';
-import 'package:dnd_project/features/auth/presentation/providers/auth_provider.dart';
+import 'package:dnd_project/core/providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -57,29 +57,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     setState(() {
       _isLoading = true;
       _isLoginError = false;
+      _errorMessage = '';
     });
 
     try {
-      final result = await ref.read(authProvider.notifier).login(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
+      final success = await ref.read(authProvider.notifier).login(
+            _emailController.text.trim(),
+            _passwordController.text,
+          );
 
-      if (result.success) {
-        if (context.mounted) {
-          context.go('/home');
-        }
+      if (!mounted) return;
+
+      if (success) {
+        context.go('/home');
       } else {
         setState(() {
           _isLoginError = true;
-          _errorMessage = result.message ?? 'Ошибка авторизации';
+          _errorMessage = 'Ошибка входа';
           _isLoading = false;
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoginError = true;
-        _errorMessage = 'Произошла ошибка. Проверьте подключение к интернету';
+        _errorMessage = e.toString();
         _isLoading = false;
       });
     }

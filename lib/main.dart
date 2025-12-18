@@ -1,21 +1,40 @@
-// lib/main.dart
-import 'package:dnd_project/features/auth/presentation/screens/register_screen.dart';
-import 'package:dnd_project/features/auth/presentation/screens/splash_screen.dart';
-import 'package:dnd_project/features/main/presentation/screens/home_screen.dart';
-import 'package:dnd_project/features/profile/presentation/screens/delete_account_screen.dart';
-import 'package:dnd_project/features/profile/presentation/screens/edit_name_screen.dart';
-import 'package:dnd_project/features/profile/presentation/screens/edit_password_screen.dart';
-import 'package:dnd_project/features/profile/presentation/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dnd_project/features/auth/presentation/screens/login_screen.dart';
+
+import '/app/router/go_router.dart';
 
 void main() {
   runApp(
     ProviderScope(
-      child: MaterialApp(
-        home: DeleteAccountScreen(), // Прямой запуск нужного экрана
-      ),
+      child: MyApp(),
     ),
   );
+}
+
+class MyApp extends ConsumerWidget {
+  MyApp({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = createRouter(ref);
+
+    return MaterialApp.router(
+      title: 'D&D Campaign Manager',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF8B4513),
+          brightness: Brightness.light,
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF9F5F0),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF8B4513),
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+      ),
+      routerConfig: router,
+    );
+  }
 }

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dnd_project/core/constants/app_colors.dart';
-import 'package:dnd_project/features/auth/presentation/providers/auth_provider.dart';
+import 'package:dnd_project/core/providers/auth_provider.dart';
 
 class DeleteAccountScreen extends ConsumerStatefulWidget {
   const DeleteAccountScreen({super.key});
