@@ -9,7 +9,9 @@ import 'package:uuid/uuid.dart';
 import '/core/constants/app_colors.dart';
 import '/core/providers/character_providers.dart';
 import '/core/providers/campaign_providers.dart';
+import '/core/providers/reference_providers.dart';
 import '/domain/models/character.dart';
+import 'dart:math';
 
 class CreateCharacterScreen extends ConsumerStatefulWidget {
   const CreateCharacterScreen({super.key});
@@ -111,6 +113,291 @@ class _CreateCharacterScreenState extends ConsumerState<CreateCharacterScreen> {
     _playerNameController.dispose();
     _backstoryController.dispose();
     super.dispose();
+  }
+
+  /// Генерация случайного персонажа с использованием Random User API
+  Future<void> _generateRandomCharacter() async {
+    bool isDialogOpen = false;
+    try {
+      // Показываем индикатор загрузки
+      if (!mounted) return;
+      
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Генерация персонажа...\nПервый запрос может занять время',
+                    style: GoogleFonts.cinzel(),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      isDialogOpen = true;
+
+      // Получаем случайного пользователя напрямую через API клиент
+      // Retry логика встроена в API клиент
+      final apiClient = ref.read(randomUserApiClientProvider);
+      final randomUser = await apiClient.getRandomUser();
+      
+      // Получаем списки рас и классов из API
+      final races = await ref.read(racesProvider.future);
+      final classes = await ref.read(classesProvider.future);
+
+      if (!mounted) {
+        if (isDialogOpen) {
+          try {
+            Navigator.of(context, rootNavigator: false).pop();
+          } catch (e) {
+            // Игнорируем ошибки
+          }
+          isDialogOpen = false;
+        }
+        return;
+      }
+
+      // Извлекаем данные из ответа API
+      final userData = randomUser['results'][0] as Map<String, dynamic>;
+      final nameData = userData['name'] as Map<String, dynamic>;
+      final firstName = nameData['first'] as String;
+      final lastName = nameData['last'] as String;
+      final fullName = '$firstName $lastName';
+      
+      // Случайно выбираем расу и класс
+      final random = Random();
+      
+      // Маппинг имен из API на локальные имена
+      String mapRaceName(String apiName) {
+        final raceMap = {
+          'human': 'Человек',
+          'elf': 'Эльф',
+          'dwarf': 'Дварф',
+          'halfling': 'Халфлинг',
+          'gnome': 'Гном',
+          'half-elf': 'Полуэльф',
+          'half-orc': 'Полуорк',
+          'tiefling': 'Тифлинг',
+          'dragonborn': 'Драконорожденный',
+        };
+        return raceMap[apiName.toLowerCase()] ?? apiName;
+      }
+      
+      String mapClassName(String apiName) {
+        final classMap = {
+          'fighter': 'Воин',
+          'wizard': 'Волшебник',
+          'cleric': 'Жрец',
+          'rogue': 'Плут',
+          'barbarian': 'Варвар',
+          'bard': 'Бард',
+          'druid': 'Друид',
+          'paladin': 'Паладин',
+          'ranger': 'Следопыт',
+          'sorcerer': 'Чародей',
+          'warlock': 'Колдун',
+          'monk': 'Монах',
+        };
+        return classMap[apiName.toLowerCase()] ?? apiName;
+      }
+
+      // Выбираем расу и класс
+      String selectedRace;
+      String selectedClass;
+      
+      if (races.isNotEmpty) {
+        final randomRace = races[random.nextInt(races.length)];
+        // Используем index для маппинга, так как в API это ключ
+        final mappedRace = mapRaceName(randomRace.index);
+        // Проверяем, есть ли такая раса в локальном списке
+        selectedRace = _races.contains(mappedRace) 
+            ? mappedRace 
+            : _races[random.nextInt(_races.length)];
+      } else {
+        selectedRace = _races[random.nextInt(_races.length)];
+      }
+      
+      if (classes.isNotEmpty) {
+        final randomClass = classes[random.nextInt(classes.length)];
+        // Используем index для маппинга, так как в API это ключ
+        final mappedClass = mapClassName(randomClass.index);
+        // Проверяем, есть ли такой класс в локальном списке
+        selectedClass = _classes.contains(mappedClass)
+            ? mappedClass
+            : _classes[random.nextInt(_classes.length)];
+      } else {
+        selectedClass = _classes[random.nextInt(_classes.length)];
+      }
+
+      if (!mounted) {
+        if (isDialogOpen) {
+          try {
+            Navigator.of(context, rootNavigator: false).pop();
+          } catch (e) {
+            // Игнорируем ошибки
+          }
+          isDialogOpen = false;
+        }
+        return;
+      }
+
+      // Генерируем случайную предысторию на основе данных пользователя
+      final location = userData['location'] as Map<String, dynamic>?;
+      final city = location?['city'] as String? ?? 'неизвестном городе';
+      final country = location?['country'] as String? ?? 'далеких землях';
+      final age = userData['dob']?['age'] as int? ?? 25;
+      
+      final backstory = 
+          '$fullName родился в $city, в $country. '
+          'В возрасте $age лет $fullName решил стать искателем приключений. '
+          'С детства проявлял интерес к приключениям и магии. '
+          'Теперь готов отправиться в опасное путешествие.';
+
+      // Заполняем форму
+      setState(() {
+        _nameController.text = fullName;
+        _playerNameController.text = firstName;
+        _selectedRace = selectedRace;
+        _selectedClass = selectedClass;
+        _level = 1 + random.nextInt(5); // Уровень от 1 до 5
+        _selectedColorIndex = random.nextInt(_avatarColors.length);
+        _backstoryController.text = backstory;
+      });
+
+      if (!mounted) {
+        if (isDialogOpen) {
+          Navigator.pop(context);
+          isDialogOpen = false;
+        }
+        return;
+      }
+
+      // Создаем и сохраняем персонажа в локальное хранилище
+      try {
+        final character = Character(
+          id: const Uuid().v4(),
+          name: fullName,
+          race: selectedRace,
+          characterClass: selectedClass,
+          level: _level,
+          campaign: _selectedCampaign == 'Новая кампания' ? null : _selectedCampaign,
+          lastPlayed: DateTime.now(),
+        );
+
+        // Сохраняем в Hive
+        await ref.read(createCharacterProvider(character).future);
+
+        // Закрываем диалог загрузки после успешного сохранения
+        if (isDialogOpen && mounted) {
+          try {
+            Navigator.of(context, rootNavigator: false).pop();
+          } catch (e) {
+            // Игнорируем ошибки
+          }
+          isDialogOpen = false;
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Случайный персонаж "${character.name}" создан и сохранен!',
+                style: GoogleFonts.cinzel(),
+              ),
+              backgroundColor: AppColors.successGreen,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          // Закрываем экран создания и возвращаемся к списку персонажей
+          context.pop();
+        }
+      } catch (saveError) {
+        // Закрываем диалог даже при ошибке сохранения
+        if (isDialogOpen && mounted) {
+          try {
+            Navigator.of(context, rootNavigator: false).pop();
+          } catch (e) {
+            // Игнорируем ошибки
+          }
+          isDialogOpen = false;
+        }
+        
+        // Если сохранение не удалось, все равно показываем заполненную форму
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Персонаж создан, но не сохранен: $saveError',
+                style: GoogleFonts.cinzel(),
+              ),
+              backgroundColor: AppColors.errorRed,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Ошибка обрабатывается в finally блоке
+      if (mounted) {
+        String errorMessage = 'Ошибка генерации персонажа';
+        final errorString = e.toString();
+        
+        // Более понятные сообщения для пользователя
+        if (errorString.contains('Network Error') || 
+            errorString.contains('connection') ||
+            errorString.contains('XMLHttpRequest')) {
+          errorMessage = 'Ошибка сети. Проверьте интернет-соединение и попробуйте снова.';
+        } else if (errorString.contains('timeout') || errorString.contains('Таймаут')) {
+          errorMessage = 'Превышено время ожидания. Проверьте интернет-соединение.';
+        } else if (errorString.contains('API Error')) {
+          errorMessage = 'Ошибка API. Сервис временно недоступен.';
+        } else {
+          errorMessage = 'Ошибка: ${e.toString()}';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errorMessage,
+              style: GoogleFonts.cinzel(),
+            ),
+            backgroundColor: AppColors.errorRed,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Повторить',
+              textColor: Colors.white,
+              onPressed: () => _generateRandomCharacter(),
+            ),
+          ),
+        );
+      }
+    } finally {
+      // Гарантируем закрытие диалога в любом случае
+      // Проверяем, открыт ли диалог, и закрываем его
+      if (mounted) {
+        try {
+          // Пытаемся закрыть диалог, если он открыт
+          if (isDialogOpen) {
+            Navigator.of(context, rootNavigator: false).pop();
+            isDialogOpen = false;
+          }
+        } catch (e) {
+          // Игнорируем ошибки при закрытии диалога
+          // (например, если диалог уже был закрыт)
+        }
+      }
+    }
   }
 
   Future<void> _createCharacter() async {
@@ -722,6 +1009,11 @@ class _CreateCharacterScreenState extends ConsumerState<CreateCharacterScreen> {
         ),
         actions: [
           IconButton(
+            onPressed: _generateRandomCharacter,
+            icon: Icon(Icons.auto_awesome_rounded, color: AppColors.darkBrown),
+            tooltip: 'Создать случайного персонажа',
+          ),
+          IconButton(
             onPressed: () {
               // TODO: Сохранить как черновик
               ScaffoldMessenger.of(context).showSnackBar(
@@ -779,6 +1071,68 @@ class _CreateCharacterScreenState extends ConsumerState<CreateCharacterScreen> {
                       ),
                     ),
                   ),
+                ),
+              ),
+
+              // Кнопка генерации случайного персонажа
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 24),
+                  child: ElevatedButton.icon(
+                    onPressed: _generateRandomCharacter,
+                    icon: const Icon(Icons.auto_awesome_rounded),
+                    label: Text(
+                      'Создать случайного персонажа',
+                      style: GoogleFonts.cinzel(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.infoBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 2,
+                    ),
+                  ),
+                ),
+              ),
+
+              // Разделитель
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Divider(
+                        color: AppColors.lightBrown.withOpacity(0.3),
+                        thickness: 1,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'или заполните вручную',
+                        style: GoogleFonts.cinzel(
+                          fontSize: 14,
+                          color: AppColors.woodBrown,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Divider(
+                        color: AppColors.lightBrown.withOpacity(0.3),
+                        thickness: 1,
+                      ),
+                    ),
+                  ],
                 ),
               ),
 

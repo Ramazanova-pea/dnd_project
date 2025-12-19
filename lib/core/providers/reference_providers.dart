@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dnd_project/data/datasources/remote/dnd5e_api_client.dart';
+import 'package:dnd_project/data/datasources/remote/random_user_api_client.dart';
 import 'package:dnd_project/data/repositories/reference_repository_impl.dart';
 import 'package:dnd_project/domain/repositories/reference_repository.dart';
 import 'package:dnd_project/domain/models/reference/class_model.dart';
@@ -58,5 +59,17 @@ final spellsProvider = FutureProvider<List<SpellModel>>((ref) async {
 final spellByIdProvider = FutureProvider.family<SpellModel, String>((ref, id) async {
   final repository = ref.read(referenceRepositoryProvider);
   return await repository.getSpellById(id);
+});
+
+/// Провайдер API клиента Random User Generator
+final randomUserApiClientProvider = Provider<RandomUserApiClient>((ref) {
+  return RandomUserApiClient();
+});
+
+/// Провайдер для получения случайного пользователя
+/// Используем autoDispose для получения нового пользователя при каждом запросе
+final randomUserProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
+  final apiClient = ref.read(randomUserApiClientProvider);
+  return await apiClient.getRandomUser();
 });
 

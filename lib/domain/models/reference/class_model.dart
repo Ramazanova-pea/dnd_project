@@ -22,6 +22,39 @@ class ClassModel {
 
   /// Создать из JSON (из API)
   factory ClassModel.fromJson(Map<String, dynamic> json) {
+    // Безопасная обработка списка объектов в список карт
+    List<Map<String, dynamic>>? parseListOfMaps(dynamic value) {
+      if (value == null) return null;
+      if (value is List) {
+        return value.map((e) {
+          if (e is Map) {
+            return Map<String, dynamic>.from(e);
+          } else if (e is Map<String, dynamic>) {
+            return e;
+          } else {
+            // Если элемент не карта, создаем карту с именем
+            return {'name': e.toString()};
+          }
+        }).toList();
+      }
+      return null;
+    }
+
+    // Обработка starting_equipment - может быть список или карта
+    Map<String, dynamic>? parseStartingEquipment(dynamic value) {
+      if (value == null) return null;
+      if (value is Map) {
+        return Map<String, dynamic>.from(value);
+      }
+      if (value is Map<String, dynamic>) {
+        return value;
+      }
+      if (value is List) {
+        return {'items': value};
+      }
+      return null;
+    }
+
     return ClassModel(
       index: json['index'] as String,
       name: json['name'] as String,
@@ -31,15 +64,9 @@ class ClassModel {
               .map((e) => e.toString())
               .toList()
           : null,
-      proficiencies: json['proficiencies'] != null
-          ? List<Map<String, dynamic>>.from(json['proficiencies'])
-          : null,
-      savingThrows: json['saving_throws'] != null
-          ? List<Map<String, dynamic>>.from(json['saving_throws'])
-          : null,
-      startingEquipment: json['starting_equipment'] != null
-          ? Map<String, dynamic>.from(json['starting_equipment'])
-          : null,
+      proficiencies: parseListOfMaps(json['proficiencies']),
+      savingThrows: parseListOfMaps(json['saving_throws']),
+      startingEquipment: parseStartingEquipment(json['starting_equipment']),
       url: json['url'] as String?,
     );
   }
