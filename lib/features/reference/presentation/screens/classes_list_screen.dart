@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '/core/constants/app_colors.dart';
+import '/core/providers/reference_providers.dart';
+import '/domain/models/reference/class_model.dart';
 
 class ClassesListScreen extends ConsumerStatefulWidget {
   const ClassesListScreen({Key? key}) : super(key: key);
@@ -22,197 +24,71 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
   final List<String> _roleOptions = ['Все', 'Защитник', 'Контроллер', 'Лидер', 'Штурмовик'];
   final List<String> _powerSourceOptions = ['Все', 'Божественная', 'Марсиальная', 'Аркана', 'Природная'];
 
-  // Пример данных о классах
-  final List<Map<String, dynamic>> _classes = [
-    {
-      'id': '1',
-      'name': 'Воин',
-      'description': 'Мастер оружия и доспехов',
-      'icon': Icons.sports_martial_arts,
-      'color': const Color(0xFFC62828),
-      'role': 'Защитник',
-      'powerSource': 'Марсиальная',
-      'primaryAbility': 'Сила',
-      'hitDie': 'd10',
-      'armor': 'Все доспехи, щиты',
-      'weapons': 'Простое и воинское оружие',
-      'skills': 2,
-      'spellcasting': false,
-    },
-    {
-      'id': '2',
-      'name': 'Волшебник',
-      'description': 'Мастер арканной магии',
-      'icon': Icons.auto_awesome,
-      'color': const Color(0xFF1565C0),
-      'role': 'Контроллер',
-      'powerSource': 'Аркана',
-      'primaryAbility': 'Интеллект',
-      'hitDie': 'd6',
-      'armor': 'Нет',
-      'weapons': 'Кинжалы, дротики, пращи, посохи, лёгкие арбалеты',
-      'skills': 2,
-      'spellcasting': true,
-    },
-    {
-      'id': '3',
-      'name': 'Жрец',
-      'description': 'Посредник между смертными и божествами',
-      'icon': Icons.emoji_people,
-      'color': const Color(0xFFF9A825),
-      'role': 'Лидер',
-      'powerSource': 'Божественная',
-      'primaryAbility': 'Мудрость',
-      'hitDie': 'd8',
-      'armor': 'Лёгкие и средние доспехи, щиты',
-      'weapons': 'Простое оружие',
-      'skills': 2,
-      'spellcasting': true,
-    },
-    {
-      'id': '4',
-      'name': 'Плут',
-      'description': 'Мастер скрытности и хитрости',
-      'icon': Icons.directions_run,
-      'color': const Color(0xFF4CAF50),
-      'role': 'Штурмовик',
-      'powerSource': 'Марсиальная',
-      'primaryAbility': 'Ловкость',
-      'hitDie': 'd8',
-      'armor': 'Лёгкие доспехи',
-      'weapons': 'Простое оружие, арбалеты, длинные мечи, рапиры, короткие мечи',
-      'skills': 4,
-      'spellcasting': false,
-    },
-    {
-      'id': '5',
-      'name': 'Варвар',
-      'description': 'Неистовый воин-берсерк',
-      'icon': Icons.fitness_center,
-      'color': const Color(0xFF795548),
-      'role': 'Штурмовик',
-      'powerSource': 'Марсиальная',
-      'primaryAbility': 'Сила',
-      'hitDie': 'd12',
-      'armor': 'Лёгкие и средние доспехи, щиты',
-      'weapons': 'Простое и воинское оружие',
-      'skills': 2,
-      'spellcasting': false,
-    },
-    {
-      'id': '6',
-      'name': 'Бард',
-      'description': 'Вдохновитель через музыку и магию',
-      'icon': Icons.music_note,
-      'color': const Color(0xFF9C27B0),
-      'role': 'Лидер',
-      'powerSource': 'Аркана',
-      'primaryAbility': 'Харизма',
-      'hitDie': 'd8',
-      'armor': 'Лёгкие доспехи',
-      'weapons': 'Простое оружие, длинные мечи, рапиры, короткие мечи, короткие луки',
-      'skills': 3,
-      'spellcasting': true,
-    },
-    {
-      'id': '7',
-      'name': 'Друид',
-      'description': 'Жрец дикой природы',
-      'icon': Icons.forest,
-      'color': const Color(0xFF2E7D32),
-      'role': 'Контроллер',
-      'powerSource': 'Природная',
-      'primaryAbility': 'Мудрость',
-      'hitDie': 'd8',
-      'armor': 'Лёгкие и средние доспехи, щиты (не металлические)',
-      'weapons': 'Булавы, кинжалы, дротики, пращи, посохи, серпы, копья',
-      'skills': 2,
-      'spellcasting': true,
-    },
-    {
-      'id': '8',
-      'name': 'Паладин',
-      'description': 'Святой воин, клятвенный защитник',
-      'icon': Icons.shield,
-      'color': const Color(0xFFD32F2F),
-      'role': 'Защитник',
-      'powerSource': 'Божественная',
-      'primaryAbility': 'Сила и Харизма',
-      'hitDie': 'd10',
-      'armor': 'Все доспехи, щиты',
-      'weapons': 'Простое и воинское оружие',
-      'skills': 2,
-      'spellcasting': true,
-    },
-    {
-      'id': '9',
-      'name': 'Следопыт',
-      'description': 'Охотник и выживальщик',
-      'icon': Icons.travel_explore,
-      'color': const Color(0xFF689F38),
-      'role': 'Штурмовик',
-      'powerSource': 'Природная',
-      'primaryAbility': 'Ловкость и Мудрость',
-      'hitDie': 'd10',
-      'armor': 'Лёгкие и средние доспехи, щиты',
-      'weapons': 'Простое и воинское оружие',
-      'skills': 3,
-      'spellcasting': true,
-    },
-    {
-      'id': '10',
-      'name': 'Чародей',
-      'description': 'Маг с врождённой магической силой',
-      'icon': Icons.flash_on,
-      'color': const Color(0xFF0277BD),
-      'role': 'Штурмовик',
-      'powerSource': 'Аркана',
-      'primaryAbility': 'Харизма',
-      'hitDie': 'd6',
-      'armor': 'Нет',
-      'weapons': 'Кинжалы, дротики, пращи, посохи, лёгкие арбалеты',
-      'skills': 2,
-      'spellcasting': true,
-    },
-    {
-      'id': '11',
-      'name': 'Колдун',
-      'description': 'Заключивший сделку с потусторонней сущностью',
-      'icon': Icons.auto_fix_high,
-      'color': const Color(0xFF512DA8),
-      'role': 'Штурмовик',
-      'powerSource': 'Аркана',
-      'primaryAbility': 'Харизма',
-      'hitDie': 'd8',
-      'armor': 'Лёгкие доспехи',
-      'weapons': 'Простое оружие',
-      'skills': 2,
-      'spellcasting': true,
-    },
-    {
-      'id': '12',
-      'name': 'Монах',
-      'description': 'Мастер боевых искусств и духовной дисциплины',
-      'icon': Icons.sports_kabaddi,
-      'color': const Color(0xFFEF6C00),
-      'role': 'Штурмовик',
-      'powerSource': 'Марсиальная',
-      'primaryAbility': 'Ловкость и Мудрость',
-      'hitDie': 'd8',
-      'armor': 'Нет',
-      'weapons': 'Простое оружие, короткие мечи',
-      'skills': 2,
-      'spellcasting': false,
-    },
-  ];
+  // Маппинг имен классов на иконки и цвета для UI
+  Map<String, dynamic> _getClassStyle(String className) {
+    final styles = <String, Map<String, dynamic>>{
+      'barbarian': {
+        'icon': Icons.fitness_center,
+        'color': const Color(0xFF795548),
+      },
+      'bard': {
+        'icon': Icons.music_note,
+        'color': const Color(0xFF9C27B0),
+      },
+      'cleric': {
+        'icon': Icons.emoji_people,
+        'color': const Color(0xFFF9A825),
+      },
+      'druid': {
+        'icon': Icons.forest,
+        'color': const Color(0xFF2E7D32),
+      },
+      'fighter': {
+        'icon': Icons.sports_martial_arts,
+        'color': const Color(0xFFC62828),
+      },
+      'monk': {
+        'icon': Icons.sports_kabaddi,
+        'color': const Color(0xFFEF6C00),
+      },
+      'paladin': {
+        'icon': Icons.shield,
+        'color': const Color(0xFFD32F2F),
+      },
+      'ranger': {
+        'icon': Icons.travel_explore,
+        'color': const Color(0xFF689F38),
+      },
+      'rogue': {
+        'icon': Icons.directions_run,
+        'color': const Color(0xFF4CAF50),
+      },
+      'sorcerer': {
+        'icon': Icons.flash_on,
+        'color': const Color(0xFF0277BD),
+      },
+      'warlock': {
+        'icon': Icons.auto_fix_high,
+        'color': const Color(0xFF512DA8),
+      },
+      'wizard': {
+        'icon': Icons.auto_awesome,
+        'color': const Color(0xFF1565C0),
+      },
+    };
+    return styles[className.toLowerCase()] ?? {
+      'icon': Icons.person,
+      'color': AppColors.primaryBrown,
+    };
+  }
 
-  List<Map<String, dynamic>> _filteredClasses = [];
 
   @override
   void initState() {
     super.initState();
-    _filteredClasses = _classes;
-    _searchController.addListener(_filterClasses);
+    _searchController.addListener(() {
+      setState(() {}); // Обновляем UI при изменении поиска
+    });
   }
 
   @override
@@ -222,25 +98,17 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
     super.dispose();
   }
 
-  void _filterClasses() {
+  List<ClassModel> _filterClasses(List<ClassModel> classes) {
     final query = _searchController.text.toLowerCase();
 
-    setState(() {
-      _filteredClasses = _classes.where((cls) {
-        final matchesSearch = query.isEmpty ||
-            cls['name'].toLowerCase().contains(query) ||
-            cls['description'].toLowerCase().contains(query) ||
-            cls['primaryAbility'].toLowerCase().contains(query);
+    return classes.where((cls) {
+      final matchesSearch = query.isEmpty ||
+          cls.name.toLowerCase().contains(query) ||
+          cls.index.toLowerCase().contains(query);
 
-        final matchesRole = _selectedRole == 'Все' ||
-            cls['role'] == _selectedRole;
-
-        final matchesPowerSource = _selectedPowerSource == 'Все' ||
-            cls['powerSource'] == _selectedPowerSource;
-
-        return matchesSearch && matchesRole && matchesPowerSource;
-      }).toList();
-    });
+      // Фильтры по роли и источнику силы не применяем, так как API не предоставляет эти данные
+      return matchesSearch;
+    }).toList();
   }
 
   void _resetFilters() {
@@ -248,7 +116,6 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
       _selectedRole = 'Все';
       _selectedPowerSource = 'Все';
       _searchController.clear();
-      _filteredClasses = _classes;
     });
   }
 
@@ -311,13 +178,22 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        '${_filteredClasses.length} из ${_classes.length} классов',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.lightBrown,
-                          height: 1.2,
-                        ),
+                      Consumer(
+                        builder: (context, ref, child) {
+                          final classesAsync = ref.watch(classesProvider);
+                          return classesAsync.when(
+                            data: (classes) => Text(
+                              '${_filterClasses(classes).length} из ${classes.length} классов',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.lightBrown,
+                                height: 1.2,
+                              ),
+                            ),
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, __) => const SizedBox.shrink(),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -442,7 +318,6 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
                           onChanged: (value) {
                             setState(() {
                               _selectedRole = value!;
-                              _filterClasses();
                             });
                           },
                           icon: Icons.group,
@@ -457,7 +332,6 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
                           onChanged: (value) {
                             setState(() {
                               _selectedPowerSource = value!;
-                              _filterClasses();
                             });
                           },
                           icon: Icons.power,
@@ -472,57 +346,104 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
           ),
 
           // Список классов
-          if (_filteredClasses.isNotEmpty)
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (context, index) => _buildClassCard(_filteredClasses[index]),
-                childCount: _filteredClasses.length,
-              ),
-            )
-          else
-          // Сообщение, если ничего не найдено
-            SliverFillRemaining(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.search_off,
-                      color: AppColors.darkBrown.withOpacity(0.3),
-                      size: 60,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Классы не найдены',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.darkBrown.withOpacity(0.5),
+          Consumer(
+            builder: (context, ref, child) {
+              final classesAsync = ref.watch(classesProvider);
+              return classesAsync.when(
+                data: (classes) {
+                  final filtered = _filterClasses(classes);
+                  if (filtered.isNotEmpty) {
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildClassCard(filtered[index]),
+                        childCount: filtered.length,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Попробуйте изменить фильтры или поисковый запрос',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.darkBrown.withOpacity(0.4),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: _resetFilters,
-                      child: Text(
-                        'Сбросить фильтры',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.successGreen,
+                    );
+                  } else {
+                    return SliverFillRemaining(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.search_off,
+                              color: AppColors.darkBrown.withOpacity(0.3),
+                              size: 60,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Классы не найдены',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.darkBrown.withOpacity(0.5),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Попробуйте изменить поисковый запрос',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.darkBrown.withOpacity(0.4),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            TextButton(
+                              onPressed: _resetFilters,
+                              child: Text(
+                                'Сбросить фильтры',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.successGreen,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                    );
+                  }
+                },
+                loading: () => const SliverFillRemaining(
+                  child: Center(
+                    child: CircularProgressIndicator(),
+                  ),
                 ),
-              ),
-            ),
+                error: (error, stack) => SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: AppColors.errorRed,
+                          size: 60,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Ошибка загрузки классов',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.darkBrown,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          error.toString(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.darkBrown.withOpacity(0.6),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
 
           // Информация о классах
           SliverPadding(
@@ -713,7 +634,12 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
   }
 
   // Карточка класса
-  Widget _buildClassCard(Map<String, dynamic> cls) {
+  Widget _buildClassCard(ClassModel cls) {
+    final style = _getClassStyle(cls.index);
+    final classColor = style['color'] as Color;
+    final classIcon = style['icon'] as IconData;
+    final hitDie = cls.hitDie != null ? 'd${cls.hitDie}' : 'N/A';
+
     return Container(
       height: 80.0,
       margin: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
@@ -726,7 +652,7 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
           borderRadius: BorderRadius.circular(10.0),
           onTap: () {
             // Навигация к детальной информации о классе
-            context.go('/home/reference/classes/${cls['id']}');
+            context.go('/home/reference/classes/${cls.index}');
           },
           child: Container(
             decoration: BoxDecoration(
@@ -735,8 +661,8 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
                 colors: [
-                  cls['color'].withOpacity(0.12),
-                  cls['color'].withOpacity(0.05),
+                  classColor.withOpacity(0.12),
+                  classColor.withOpacity(0.05),
                 ],
               ),
             ),
@@ -748,12 +674,12 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
                   Container(
                     padding: const EdgeInsets.all(8.0),
                     decoration: BoxDecoration(
-                      color: cls['color'].withOpacity(0.15),
+                      color: classColor.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      cls['icon'],
-                      color: cls['color'],
+                      classIcon,
+                      color: classColor,
                       size: 20,
                     ),
                   ),
@@ -767,7 +693,7 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          cls['name'],
+                          cls.name,
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
@@ -777,35 +703,12 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6.0,
-                                vertical: 1.0,
-                              ),
-                              decoration: BoxDecoration(
-                                color: cls['color'].withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(4.0),
-                              ),
-                              child: Text(
-                                cls['role'],
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: cls['color'],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '• ${cls['powerSource']}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.darkBrown.withOpacity(0.6),
-                              ),
-                            ),
-                          ],
+                        Text(
+                          'Класс персонажа',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.darkBrown.withOpacity(0.6),
+                          ),
                         ),
                       ],
                     ),
@@ -821,45 +724,20 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
                         children: [
                           Icon(
                             Icons.favorite,
-                            color: cls['color'],
+                            color: classColor,
                             size: 10,
                           ),
                           const SizedBox(width: 2),
                           Text(
-                            cls['hitDie'],
+                            hitDie,
                             style: TextStyle(
                               fontSize: 12,
-                              color: cls['color'],
+                              color: classColor,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      // Основная характеристика
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6.0,
-                          vertical: 2.0,
-                        ),
-                        decoration: BoxDecoration(
-                          color: cls['color'].withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6.0),
-                          border: Border.all(
-                            color: cls['color'].withOpacity(0.3),
-                          ),
-                        ),
-                        child: Text(
-                          cls['primaryAbility'],
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: cls['color'],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-
                     ],
                   ),
 
@@ -868,7 +746,7 @@ class _ClassesListScreenState extends ConsumerState<ClassesListScreen> {
                   // Стрелка
                   Icon(
                     Icons.arrow_forward_ios,
-                    color: cls['color'],
+                    color: classColor,
                     size: 12,
                   ),
                 ],
