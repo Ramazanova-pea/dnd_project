@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '/core/constants/app_colors.dart';
+import '/core/providers/campaign_providers.dart';
+import '/domain/models/campaign.dart';
 
 class CampaignListScreen extends ConsumerStatefulWidget {
   const CampaignListScreen({Key? key}) : super(key: key);
@@ -22,8 +25,16 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
   final List<String> _statusOptions = ['Все', 'Активная', 'Завершена', 'В планах', 'На паузе'];
   final List<String> _systemOptions = ['Все', 'D&D 5e', 'Pathfinder', 'Warhammer', 'GURPS', 'Другая'];
 
-  // Пример данных о кампаниях
-  final List<Map<String, dynamic>> _campaigns = [
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() {}); // Обновляем UI при изменении поиска
+    });
+  }
+
+  // Старые мок-данные (удалить после полной миграции)
+  final List<Map<String, dynamic>> _mockCampaigns = [
     {
       'id': '1',
       'name': 'Потерянный трон Эльдора',
@@ -154,15 +165,6 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
     },
   ];
 
-  List<Map<String, dynamic>> _filteredCampaigns = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _filteredCampaigns = _campaigns;
-    _searchController.addListener(_filterCampaigns);
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -170,26 +172,25 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
     super.dispose();
   }
 
-  void _filterCampaigns() {
+  /// Фильтрация кампаний по поисковому запросу и фильтрам
+  List<Campaign> _filterCampaigns(List<Campaign> campaigns) {
     final query = _searchController.text.toLowerCase();
 
-    setState(() {
-      _filteredCampaigns = _campaigns.where((campaign) {
-        final matchesSearch = query.isEmpty ||
-            campaign['name'].toLowerCase().contains(query) ||
-            campaign['description'].toLowerCase().contains(query) ||
-            campaign['master'].toLowerCase().contains(query) ||
-            campaign['setting'].toLowerCase().contains(query);
+    return campaigns.where((campaign) {
+      final matchesSearch = query.isEmpty ||
+          campaign.name.toLowerCase().contains(query) ||
+          campaign.description.toLowerCase().contains(query) ||
+          campaign.master.toLowerCase().contains(query) ||
+          campaign.setting.toLowerCase().contains(query);
 
-        final matchesStatus = _selectedStatus == 'Все' ||
-            campaign['status'] == _selectedStatus;
+      final matchesStatus = _selectedStatus == 'Все' ||
+          campaign.status == _selectedStatus;
 
-        final matchesSystem = _selectedSystem == 'Все' ||
-            campaign['system'] == _selectedSystem;
+      final matchesSystem = _selectedSystem == 'Все' ||
+          campaign.system == _selectedSystem;
 
-        return matchesSearch && matchesStatus && matchesSystem;
-      }).toList();
-    });
+      return matchesSearch && matchesStatus && matchesSystem;
+    }).toList();
   }
 
   void _resetFilters() {
@@ -197,17 +198,43 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
       _selectedStatus = 'Все';
       _selectedSystem = 'Все';
       _searchController.clear();
-      _filteredCampaigns = _campaigns;
     });
   }
 
-  String _formatDate(String? date) {
-    if (date == null) return '—';
-    final parts = date.split('-');
-    if (parts.length == 3) {
-      return '${parts[2]}.${parts[1]}.${parts[0]}';
+  /// Удаление кампании
+  Future<void> _deleteCampaign(Campaign campaign) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить кампанию?'),
+        content: Text('Вы уверены, что хотите удалить кампанию "${campaign.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(deleteCampaignProvider(campaign.id).future);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Кампания "${campaign.name}" удалена')),
+        );
+      }
     }
-    return date;
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '—';
+    return '${date.day}.${date.month}.${date.year}';
   }
 
   @override
@@ -270,13 +297,22 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        '${_filteredCampaigns.length} из ${_campaigns.length} кампаний',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: lightBrownColor,
-                          height: 1.2,
-                        ),
+                      Consumer(
+                        builder: (context, ref, child) {
+                          final campaignsAsync = ref.watch(campaignsProvider);
+                          return campaignsAsync.when(
+                            data: (campaigns) => Text(
+                              '${_filterCampaigns(campaigns).length} из ${campaigns.length} кампаний',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: lightBrownColor,
+                                height: 1.2,
+                              ),
+                            ),
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, __) => const SizedBox.shrink(),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -409,7 +445,6 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                           onChanged: (value) {
                             setState(() {
                               _selectedStatus = value!;
-                              _filterCampaigns();
                             });
                           },
                           icon: Icons.circle,
@@ -424,7 +459,6 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                           onChanged: (value) {
                             setState(() {
                               _selectedSystem = value!;
-                              _filterCampaigns();
                             });
                           },
                           icon: Icons.sports_esports,
@@ -439,16 +473,21 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
           ),
 
           // Список кампаний
-          if (_filteredCampaigns.isNotEmpty)
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (context, index) => _buildCampaignCard(_filteredCampaigns[index]),
-                childCount: _filteredCampaigns.length,
-              ),
-            )
-          else
-          // Сообщение, если ничего не найдено
-            SliverFillRemaining(
+          Consumer(
+            builder: (context, ref, child) {
+              final campaignsAsync = ref.watch(campaignsProvider);
+              return campaignsAsync.when(
+                data: (campaigns) {
+                  final filtered = _filterCampaigns(campaigns);
+                  if (filtered.isNotEmpty) {
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildCampaignCard(filtered[index]),
+                        childCount: filtered.length,
+                      ),
+                    );
+                  } else {
+                    return SliverFillRemaining(
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -493,7 +532,34 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                   ],
                 ),
               ),
-            ),
+                    );
+                  }
+                },
+                loading: () => SliverFillRemaining(
+                  child: Center(
+                    child: CircularProgressIndicator(color: primaryBrownColor),
+                  ),
+                ),
+                error: (error, stack) => SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red, size: 48),
+                        const SizedBox(height: 16),
+                        Text('Ошибка загрузки кампаний', style: TextStyle(color: darkBrownColor)),
+                        const SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: () => ref.invalidate(campaignsProvider),
+                          child: const Text('Повторить'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
 
           // Информация о кампаниях
           SliverPadding(
@@ -542,26 +608,35 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                     ),
                     const SizedBox(height: 8),
                     // Статистика
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        _buildStatItem(
-                            'Активные',
-                            _campaigns.where((c) => c['status'] == 'Активная').length.toString(),
-                            Icons.play_arrow
-                        ),
-                        _buildStatItem(
-                            'Завершённые',
-                            _campaigns.where((c) => c['status'] == 'Завершена').length.toString(),
-                            Icons.check
-                        ),
-                        _buildStatItem(
-                            'Всего сессий',
-                            _campaigns.fold<int>(0, (sum, c) => sum + (c['sessions'] as int)).toString(),
-                            Icons.event
-                        ),
-                      ],
+                    Consumer(
+                      builder: (context, ref, child) {
+                        final campaignsAsync = ref.watch(campaignsProvider);
+                        return campaignsAsync.when(
+                          data: (campaigns) => Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              _buildStatItem(
+                                'Активные',
+                                campaigns.where((c) => c.status == 'Активная').length.toString(),
+                                Icons.play_arrow,
+                              ),
+                              _buildStatItem(
+                                'Завершённые',
+                                campaigns.where((c) => c.status == 'Завершена').length.toString(),
+                                Icons.check,
+                              ),
+                              _buildStatItem(
+                                'Всего сессий',
+                                campaigns.fold<int>(0, (sum, c) => sum + c.sessions).toString(),
+                                Icons.event,
+                              ),
+                            ],
+                          ),
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, __) => const SizedBox.shrink(),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -672,12 +747,12 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
   }
 
   // Карточка кампании
-  Widget _buildCampaignCard(Map<String, dynamic> campaign) {
+  Widget _buildCampaignCard(Campaign campaign) {
     final darkBrownColor = AppColors.darkBrown;
 
     // Цвет статуса
     Color statusColor;
-    switch (campaign['status']) {
+    switch (campaign.status) {
       case 'Активная':
         statusColor = Colors.green;
         break;
@@ -694,6 +769,26 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
         statusColor = Colors.grey;
     }
 
+    // Иконка и цвет на основе названия
+    IconData campaignIcon = Icons.castle;
+    Color campaignColor = AppColors.primaryBrown;
+    if (campaign.name.toLowerCase().contains('море') || campaign.name.toLowerCase().contains('пират')) {
+      campaignIcon = Icons.sailing;
+      campaignColor = Colors.blue;
+    } else if (campaign.name.toLowerCase().contains('кибер') || campaign.name.toLowerCase().contains('техно')) {
+      campaignIcon = Icons.computer;
+      campaignColor = Colors.cyan;
+    } else if (campaign.name.toLowerCase().contains('космос')) {
+      campaignIcon = Icons.rocket_launch;
+      campaignColor = Colors.purple;
+    } else if (campaign.name.toLowerCase().contains('вампир') || campaign.name.toLowerCase().contains('тьма')) {
+      campaignIcon = Icons.nightlife;
+      campaignColor = Colors.deepPurple;
+    } else if (campaign.name.toLowerCase().contains('дракон')) {
+      campaignIcon = Icons.pets;
+      campaignColor = Colors.red;
+    }
+
     return Container(
       height: 120.0,
       margin: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
@@ -705,7 +800,10 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(10.0),
           onTap: () {
-            context.go('/home/campaigns/${campaign['id']}');
+            context.go('/home/campaigns/${campaign.id}');
+          },
+          onLongPress: () {
+            _deleteCampaign(campaign);
           },
           child: Container(
             decoration: BoxDecoration(
@@ -714,8 +812,8 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
                 colors: [
-                  campaign['color'].withOpacity(0.12),
-                  campaign['color'].withOpacity(0.05),
+                  campaignColor.withOpacity(0.12),
+                  campaignColor.withOpacity(0.05),
                 ],
               ),
             ),
@@ -727,12 +825,12 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                   Container(
                     padding: const EdgeInsets.all(10.0),
                     decoration: BoxDecoration(
-                      color: campaign['color'].withOpacity(0.15),
+                      color: campaignColor.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      campaign['icon'],
-                      color: campaign['color'],
+                      campaignIcon,
+                      color: campaignColor,
                       size: 24,
                     ),
                   ),
@@ -749,7 +847,7 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                campaign['name'],
+                                campaign.name,
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
@@ -772,7 +870,7 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                                 ),
                               ),
                               child: Text(
-                                campaign['status'],
+                                campaign.status,
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: statusColor,
@@ -784,7 +882,7 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          campaign['description'],
+                          campaign.description,
                           style: TextStyle(
                             fontSize: 12,
                             color: darkBrownColor.withOpacity(0.6),
@@ -801,21 +899,21 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                                 vertical: 2.0,
                               ),
                               decoration: BoxDecoration(
-                                color: campaign['color'].withOpacity(0.1),
+                                color: campaignColor.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(4.0),
                               ),
                               child: Text(
-                                campaign['system'],
+                                campaign.system,
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: campaign['color'],
+                                  color: campaignColor,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'Мастер: ${campaign['master']}',
+                              'Мастер: ${campaign.master}',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: darkBrownColor.withOpacity(0.6),
@@ -839,15 +937,15 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                             children: [
                               Icon(
                                 Icons.people,
-                                color: campaign['color'],
+                                color: campaignColor,
                                 size: 12,
                               ),
                               const SizedBox(width: 2),
                               Text(
-                                '${campaign['players']}',
+                                '${campaign.players}',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: campaign['color'],
+                                  color: campaignColor,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -858,15 +956,15 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                             children: [
                               Icon(
                                 Icons.event,
-                                color: campaign['color'],
+                                color: campaignColor,
                                 size: 12,
                               ),
                               const SizedBox(width: 2),
                               Text(
-                                '${campaign['sessions']}',
+                                '${campaign.sessions}',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: campaign['color'],
+                                  color: campaignColor,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -877,7 +975,7 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                       const SizedBox(height: 4),
 
                       // Следующая сессия
-                      if (campaign['nextSession'] != null)
+                      if (campaign.nextSession != null)
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 6.0,
@@ -896,7 +994,7 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                               ),
                               const SizedBox(width: 2),
                               Text(
-                                _formatDate(campaign['nextSession']),
+                                _formatDate(campaign.nextSession),
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: Colors.green,
@@ -906,9 +1004,9 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                             ],
                           ),
                         )
-                      else if (campaign['lastSession'] != null)
+                      else if (campaign.lastSession != null)
                         Text(
-                          'Последняя: ${_formatDate(campaign['lastSession'])}',
+                          'Последняя: ${_formatDate(campaign.lastSession)}',
                           style: TextStyle(
                             fontSize: 10,
                             color: darkBrownColor.withOpacity(0.5),
@@ -917,25 +1015,25 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
 
                       const SizedBox(height: 4),
 
-                      // Заметки
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.note,
-                            color: campaign['color'],
-                            size: 10,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            '${campaign['notes']}',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: campaign['color'],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
+                      // Заметки (можно добавить поле notes в модель Campaign в будущем)
+                      // Row(
+                      //   children: [
+                      //     Icon(
+                      //       Icons.note,
+                      //       color: campaignColor,
+                      //       size: 10,
+                      //     ),
+                      //     const SizedBox(width: 2),
+                      //     Text(
+                      //       '0',
+                      //       style: TextStyle(
+                      //         fontSize: 10,
+                      //         color: campaignColor,
+                      //         fontWeight: FontWeight.w500,
+                      //       ),
+                      //     ),
+                      //   ],
+                      // ),
                     ],
                   ),
 
@@ -944,7 +1042,7 @@ class _CampaignListScreenState extends ConsumerState<CampaignListScreen> {
                   // Стрелка
                   Icon(
                     Icons.arrow_forward_ios,
-                    color: campaign['color'],
+                    color: campaignColor,
                     size: 12,
                   ),
                 ],

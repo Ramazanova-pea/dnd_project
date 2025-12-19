@@ -1,12 +1,16 @@
 // lib/features/characters/presentation/screens/edit_character_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '/core/constants/app_colors.dart';
+import '/core/providers/character_providers.dart';
+import '/core/providers/campaign_providers.dart';
+import '/domain/models/character.dart';
 
-class EditCharacterScreen extends StatefulWidget {
+class EditCharacterScreen extends ConsumerStatefulWidget {
   final String characterId;
 
   const EditCharacterScreen({
@@ -15,10 +19,10 @@ class EditCharacterScreen extends StatefulWidget {
   });
 
   @override
-  State<EditCharacterScreen> createState() => _EditCharacterScreenState();
+  ConsumerState<EditCharacterScreen> createState() => _EditCharacterScreenState();
 }
 
-class _EditCharacterScreenState extends State<EditCharacterScreen> {
+class _EditCharacterScreenState extends ConsumerState<EditCharacterScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _playerNameController;
@@ -62,15 +66,7 @@ class _EditCharacterScreenState extends State<EditCharacterScreen> {
     'Изобретатель',
   ];
 
-  final List<String> _campaigns = [
-    'Новая кампания',
-    'Проклятие Страда',
-    'Королевство Под Горой',
-    'Тени Недер-Рада',
-    'Свет и Тьма',
-    'Дыхание Дракона',
-    'Механические Тайны',
-  ];
+  // Список кампаний будет загружаться из провайдера
 
   final List<Color> _avatarColors = [
     Colors.blue,
@@ -115,53 +111,18 @@ class _EditCharacterScreenState extends State<EditCharacterScreen> {
     'Изобретатель': 'Гений, создающий механические устройства и алхимические смеси.',
   };
 
-  // Мок-данные персонажа для редактирования
-  final Map<String, dynamic> _characterData = {
-    'id': '1',
-    'name': 'Арвен Веледа',
-    'playerName': 'Алексей',
-    'race': 'Эльф',
-    'class': 'Рейнджер',
-    'level': 5,
-    'campaign': 'Проклятие Страда',
-    'backstory': 'Дочь лесного эльфа, поклявшаяся защищать природу от сил тьмы.',
-    'avatarColor': Colors.green,
-    'createdAt': '2024-01-15T10:30:00Z',
-    'lastPlayed': '2024-02-15T14:45:00Z',
-    'stats': {
-      'strength': 12,
-      'dexterity': 18,
-      'constitution': 14,
-      'intelligence': 16,
-      'wisdom': 15,
-      'charisma': 13,
-    },
-    'equipment': ['Длинный лук', 'Кинжал', 'Кожаный доспех'],
-    'spells': ['Обнаружение магии', 'Опутывание', 'Общение с животными'],
-  };
-
   @override
   void initState() {
     super.initState();
-
-    // Загружаем данные персонажа (в реальном приложении из API/базы)
-    _nameController = TextEditingController(text: _characterData['name']);
-    _playerNameController = TextEditingController(text: _characterData['playerName']);
-    _backstoryController = TextEditingController(text: _characterData['backstory']);
-
-    _selectedRace = _characterData['race'];
-    _selectedClass = _characterData['class'];
-    _selectedCampaign = _characterData['campaign'];
-    _level = _characterData['level'];
-
-    // Находим индекс цвета в палитре
-    final Color avatarColor = _characterData['avatarColor'];
-    _selectedColorIndex = _avatarColors.indexWhere((color) =>
-    color.value == avatarColor.value);
-
-    if (_selectedColorIndex == -1) {
-      _selectedColorIndex = 0;
-    }
+    // Инициализируем контроллеры с пустыми значениями
+    _nameController = TextEditingController();
+    _playerNameController = TextEditingController();
+    _backstoryController = TextEditingController();
+    _selectedRace = 'Человек';
+    _selectedClass = 'Воин';
+    _selectedCampaign = 'Новая кампания';
+    _level = 1;
+    _selectedColorIndex = 0;
   }
 
   @override
@@ -172,36 +133,62 @@ class _EditCharacterScreenState extends State<EditCharacterScreen> {
     super.dispose();
   }
 
-  void _saveChanges() {
-    if (_formKey.currentState!.validate()) {
-      // TODO: Реализовать сохранение изменений в базу данных
-      final updatedCharacter = {
-        'id': widget.characterId,
-        'name': _nameController.text,
-        'playerName': _playerNameController.text,
-        'race': _selectedRace,
-        'class': _selectedClass,
-        'level': _level,
-        'campaign': _selectedCampaign,
-        'backstory': _backstoryController.text,
-        'avatarColor': _avatarColors[_selectedColorIndex],
-        'updatedAt': DateTime.now().toIso8601String(),
-      };
+  Future<void> _saveChanges() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-      // Показать уведомление об успехе
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Изменения сохранены!',
-            style: GoogleFonts.cinzel(),
-          ),
-          backgroundColor: AppColors.successGreen,
-          duration: const Duration(seconds: 2),
-        ),
+    try {
+      // Получаем текущего персонажа
+      final characterAsync = await ref.read(characterByIdProvider(widget.characterId).future);
+      if (characterAsync == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Персонаж не найден', style: GoogleFonts.cinzel()),
+              backgroundColor: AppColors.errorRed,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Создаем обновленного персонажа
+      final updatedCharacter = Character(
+        id: characterAsync.id,
+        name: _nameController.text,
+        race: _selectedRace,
+        characterClass: _selectedClass,
+        level: _level,
+        campaign: _selectedCampaign == 'Новая кампания' ? null : _selectedCampaign,
+        lastPlayed: characterAsync.lastPlayed,
       );
 
-      // Возврат на предыдущий экран
-      context.pop();
+      // Сохраняем в Hive (используем createCharacterProvider, который обновит существующего)
+      await ref.read(createCharacterProvider(updatedCharacter).future);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Изменения сохранены!',
+              style: GoogleFonts.cinzel(),
+            ),
+            backgroundColor: AppColors.successGreen,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка сохранения: $e', style: GoogleFonts.cinzel()),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+      }
     }
   }
 
@@ -238,19 +225,32 @@ class _EditCharacterScreenState extends State<EditCharacterScreen> {
               ),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(context);
-                // TODO: Реализовать удаление персонажа
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Персонаж "${_nameController.text}" удален',
-                      style: GoogleFonts.cinzel(),
-                    ),
-                    backgroundColor: AppColors.errorRed,
-                  ),
-                );
-                context.go('/home/characters');
+                try {
+                  await ref.read(deleteCharacterProvider(widget.characterId).future);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Персонаж "${_nameController.text}" удален',
+                          style: GoogleFonts.cinzel(),
+                        ),
+                        backgroundColor: AppColors.errorRed,
+                      ),
+                    );
+                    context.go('/home/characters');
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Ошибка удаления: $e', style: GoogleFonts.cinzel()),
+                        backgroundColor: AppColors.errorRed,
+                      ),
+                    );
+                  }
+                }
               },
               child: Text(
                 'Удалить',
@@ -579,6 +579,7 @@ class _EditCharacterScreenState extends State<EditCharacterScreen> {
   }
 
   void _showCampaignSelection() {
+    final campaignsAsync = ref.read(campaignsProvider);
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.parchment.withOpacity(0.98),
@@ -587,42 +588,55 @@ class _EditCharacterScreenState extends State<EditCharacterScreen> {
       ),
       builder: (context) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Text(
-                  'Выберите кампанию',
-                  style: GoogleFonts.cinzel(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.darkBrown,
-                  ),
-                ),
-              ),
-              ..._campaigns.map((campaign) {
-                return ListTile(
-                  title: Text(
-                    campaign,
-                    style: GoogleFonts.cinzel(
-                      fontSize: 16,
-                      color: AppColors.darkBrown,
+          child: campaignsAsync.when(
+            data: (campaigns) {
+              final campaignNames = ['Новая кампания', ...campaigns.map((c) => c.name)];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text(
+                      'Выберите кампанию',
+                      style: GoogleFonts.cinzel(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.darkBrown,
+                      ),
                     ),
                   ),
-                  trailing: _selectedCampaign == campaign
-                      ? Icon(Icons.check_rounded, color: AppColors.accentGold)
-                      : null,
-                  onTap: () {
-                    setState(() {
-                      _selectedCampaign = campaign;
-                    });
-                    Navigator.pop(context);
-                  },
-                );
-              }),
-              const SizedBox(height: 20),
-            ],
+                  ...campaignNames.map((campaign) {
+                    return ListTile(
+                      title: Text(
+                        campaign,
+                        style: GoogleFonts.cinzel(
+                          fontSize: 16,
+                          color: AppColors.darkBrown,
+                        ),
+                      ),
+                      trailing: _selectedCampaign == campaign
+                          ? Icon(Icons.check_rounded, color: AppColors.accentGold)
+                          : null,
+                      onTap: () {
+                        setState(() {
+                          _selectedCampaign = campaign;
+                        });
+                        Navigator.pop(context);
+                      },
+                    );
+                  }),
+                  const SizedBox(height: 20),
+                ],
+              );
+            },
+            loading: () => const Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(),
+            ),
+            error: (error, stack) => Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text('Ошибка загрузки кампаний: $error'),
+            ),
           ),
         );
       },
@@ -783,7 +797,16 @@ class _EditCharacterScreenState extends State<EditCharacterScreen> {
   }
 
   Widget _buildStatsCard() {
-    final stats = _characterData['stats'] as Map<String, dynamic>;
+    // Мок-данные характеристик (можно добавить поле stats в модель Character в будущем)
+    final stats = <String, int>{
+      'strength': 12,
+      'dexterity': 18,
+      'constitution': 14,
+      'intelligence': 16,
+      'wisdom': 15,
+      'charisma': 13,
+    };
+    
     return Card(
       elevation: 1,
       margin: const EdgeInsets.only(bottom: 16),
@@ -880,7 +903,24 @@ class _EditCharacterScreenState extends State<EditCharacterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final characterAsync = ref.watch(characterByIdProvider(widget.characterId));
+
+    return characterAsync.when(
+      data: (character) {
+        // Загружаем данные персонажа в контроллеры при первой загрузке
+        if (_nameController.text.isEmpty && character != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            setState(() {
+              _nameController.text = character.name;
+              _selectedRace = character.race;
+              _selectedClass = character.characterClass;
+              _selectedCampaign = character.campaign ?? 'Новая кампания';
+              _level = character.level;
+            });
+          });
+        }
+
+        return Scaffold(
       backgroundColor: AppColors.parchment.withOpacity(0.97),
       appBar: AppBar(
         backgroundColor: AppColors.parchment,
@@ -1120,6 +1160,62 @@ class _EditCharacterScreenState extends State<EditCharacterScreen> {
               ),
 
               const SizedBox(height: 40),
+            ],
+          ),
+        ),
+      ),
+        );
+      },
+      loading: () => Scaffold(
+        backgroundColor: AppColors.parchment.withOpacity(0.97),
+        appBar: AppBar(
+          backgroundColor: AppColors.parchment,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_rounded, color: AppColors.darkBrown),
+            onPressed: () => context.pop(),
+          ),
+          title: Text(
+            'Редактирование персонажа',
+            style: GoogleFonts.cinzel(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: AppColors.darkBrown,
+            ),
+          ),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: AppColors.parchment.withOpacity(0.97),
+        appBar: AppBar(
+          backgroundColor: AppColors.parchment,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_rounded, color: AppColors.darkBrown),
+            onPressed: () => context.pop(),
+          ),
+          title: Text(
+            'Редактирование персонажа',
+            style: GoogleFonts.cinzel(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: AppColors.darkBrown,
+            ),
+          ),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, color: Colors.red, size: 48),
+              const SizedBox(height: 16),
+              Text('Ошибка загрузки персонажа: $error', style: GoogleFonts.cinzel()),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () => ref.invalidate(characterByIdProvider(widget.characterId)),
+                child: const Text('Повторить'),
+              ),
             ],
           ),
         ),

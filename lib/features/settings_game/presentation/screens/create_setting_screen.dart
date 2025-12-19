@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '/core/constants/app_colors.dart';
+import '/core/providers/setting_providers.dart';
+import '/domain/models/setting.dart';
 
 class CreateSettingScreen extends ConsumerStatefulWidget {
   const CreateSettingScreen({Key? key}) : super(key: key);
@@ -55,35 +58,48 @@ class _CreateSettingScreenState extends ConsumerState<CreateSettingScreen> {
     super.dispose();
   }
 
-  void _createSetting() {
-    if (_formKey.currentState!.validate()) {
-      // В реальном приложении здесь будет сохранение в базу данных
-      final newSetting = {
-        'name': _nameController.text,
-        'description': _descriptionController.text,
-        'history': _historyController.text,
-        'notes': _notesController.text,
-        'status': _selectedStatus,
-        'genre': _selectedGenre,
-        'era': _selectedEra,
-        'magicLevel': _selectedMagicLevel,
-        'techLevel': _selectedTechLevel,
-        'color': _selectedColor,
-      };
+  Future<void> _createSetting() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-      // Показать сообщение об успехе
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: AppColors.successGreen,
-          content: Text('Игровой мир успешно создан!'),
-          duration: Duration(seconds: 2),
-        ),
+    try {
+      // Создаем сеттинг
+      final setting = Setting(
+        id: const Uuid().v4(),
+        name: _nameController.text,
+        description: _descriptionController.text,
+        status: _selectedStatus,
+        genre: _selectedGenre,
+        players: 0,
+        sessions: 0,
+        lastSession: null,
+        npcs: 0,
+        locations: 0,
       );
 
-      // Вернуться назад
-      Future.delayed(const Duration(milliseconds: 500), () {
+      // Сохраняем в Hive
+      await ref.read(createSettingProvider(setting).future);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.successGreen,
+            content: Text('Игровой мир "${setting.name}" успешно создан!'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
         context.pop();
-      });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.errorRed,
+            content: Text('Ошибка создания: $e'),
+          ),
+        );
+      }
     }
   }
 

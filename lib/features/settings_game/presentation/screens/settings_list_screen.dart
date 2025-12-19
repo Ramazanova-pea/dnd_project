@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '/core/constants/app_colors.dart';
+import '/core/providers/setting_providers.dart';
+import '/domain/models/setting.dart';
 
 class SettingsListScreen extends ConsumerStatefulWidget {
   const SettingsListScreen({Key? key}) : super(key: key);
@@ -22,8 +24,8 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
   final List<String> _statusOptions = ['Все', 'Активный', 'Завершенный', 'В разработке'];
   final List<String> _genreOptions = ['Все', 'Фэнтези', 'Научная фантастика', 'Стимпанк', 'Постапокалипсис', 'Исторический'];
 
-  // Пример данных о сеттингах
-  final List<Map<String, dynamic>> _settings = [
+  // Старые мок-данные (удалить после полной миграции)
+  final List<Map<String, dynamic>> _mockSettings = [
     {
       'id': '1',
       'name': 'Королевство Эльдора',
@@ -138,13 +140,12 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
     },
   ];
 
-  List<Map<String, dynamic>> _filteredSettings = [];
-
   @override
   void initState() {
     super.initState();
-    _filteredSettings = _settings;
-    _searchController.addListener(_filterSettings);
+    _searchController.addListener(() {
+      setState(() {}); // Обновляем UI при изменении поиска
+    });
   }
 
   @override
@@ -154,24 +155,23 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
     super.dispose();
   }
 
-  void _filterSettings() {
+  /// Фильтрация сеттингов по поисковому запросу и фильтрам
+  List<Setting> _filterSettings(List<Setting> settings) {
     final query = _searchController.text.toLowerCase();
 
-    setState(() {
-      _filteredSettings = _settings.where((setting) {
-        final matchesSearch = query.isEmpty ||
-            setting['name'].toLowerCase().contains(query) ||
-            setting['description'].toLowerCase().contains(query);
+    return settings.where((setting) {
+      final matchesSearch = query.isEmpty ||
+          setting.name.toLowerCase().contains(query) ||
+          setting.description.toLowerCase().contains(query);
 
-        final matchesStatus = _selectedStatus == 'Все' ||
-            setting['status'] == _selectedStatus;
+      final matchesStatus = _selectedStatus == 'Все' ||
+          setting.status == _selectedStatus;
 
-        final matchesGenre = _selectedGenre == 'Все' ||
-            setting['genre'] == _selectedGenre;
+      final matchesGenre = _selectedGenre == 'Все' ||
+          setting.genre == _selectedGenre;
 
-        return matchesSearch && matchesStatus && matchesGenre;
-      }).toList();
-    });
+      return matchesSearch && matchesStatus && matchesGenre;
+    }).toList();
   }
 
   void _resetFilters() {
@@ -179,8 +179,38 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
       _selectedStatus = 'Все';
       _selectedGenre = 'Все';
       _searchController.clear();
-      _filteredSettings = _settings;
     });
+  }
+
+  /// Удаление сеттинга
+  Future<void> _deleteSetting(Setting setting) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить сеттинг?'),
+        content: Text('Вы уверены, что хотите удалить сеттинг "${setting.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(deleteSettingProvider(setting.id).future);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Сеттинг "${setting.name}" удален')),
+        );
+      }
+    }
   }
 
   @override
@@ -238,13 +268,22 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        '${_filteredSettings.length} из ${_settings.length} миров',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.lightBrown,
-                          height: 1.2,
-                        ),
+                      Consumer(
+                        builder: (context, ref, child) {
+                          final settingsAsync = ref.watch(settingsProvider);
+                          return settingsAsync.when(
+                            data: (settings) => Text(
+                              '${_filterSettings(settings).length} из ${settings.length} миров',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.lightBrown,
+                                height: 1.2,
+                              ),
+                            ),
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, __) => const SizedBox.shrink(),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -377,7 +416,6 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                           onChanged: (value) {
                             setState(() {
                               _selectedStatus = value!;
-                              _filterSettings();
                             });
                           },
                           icon: Icons.circle,
@@ -392,7 +430,6 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                           onChanged: (value) {
                             setState(() {
                               _selectedGenre = value!;
-                              _filterSettings();
                             });
                           },
                           icon: Icons.category,
@@ -407,61 +444,93 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
           ),
 
           // Список сеттингов
-          if (_filteredSettings.isNotEmpty)
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (context, index) => _buildSettingCard(_filteredSettings[index]),
-                childCount: _filteredSettings.length,
-              ),
-            )
-          else
-          // Сообщение, если ничего не найдено
-            SliverFillRemaining(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.public_off,
-                      color: AppColors.darkBrown.withOpacity(0.3),
-                      size: 60,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Миры не найдены',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.darkBrown.withOpacity(0.5),
+          Consumer(
+            builder: (context, ref, child) {
+              final settingsAsync = ref.watch(settingsProvider);
+              return settingsAsync.when(
+                data: (settings) {
+                  final filtered = _filterSettings(settings);
+                  if (filtered.isNotEmpty) {
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildSettingCard(filtered[index]),
+                        childCount: filtered.length,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Попробуйте изменить фильтры или создайте новый мир',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.darkBrown.withOpacity(0.4),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        context.go('/home/settings_game/create');
-                      },
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Создать мир'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryBrown,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0),
+                    );
+                  } else {
+                    return SliverFillRemaining(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.public_off,
+                              color: AppColors.darkBrown.withOpacity(0.3),
+                              size: 60,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Миры не найдены',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.darkBrown.withOpacity(0.5),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Попробуйте изменить фильтры или создайте новый мир',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.darkBrown.withOpacity(0.4),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                context.go('/home/settings_game/create');
+                              },
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Создать мир'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primaryBrown,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8.0),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                    );
+                  }
+                },
+                loading: () => SliverFillRemaining(
+                  child: Center(
+                    child: CircularProgressIndicator(color: AppColors.primaryBrown),
+                  ),
                 ),
-              ),
-            ),
+                error: (error, stack) => SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red, size: 48),
+                        const SizedBox(height: 16),
+                        Text('Ошибка загрузки сеттингов', style: TextStyle(color: AppColors.darkBrown)),
+                        const SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: () => ref.invalidate(settingsProvider),
+                          child: const Text('Повторить'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
 
           // Информация о сеттингах
           SliverPadding(
@@ -514,9 +583,24 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                       spacing: 8,
                       runSpacing: 4,
                       children: [
-                        _buildStatInfo('Активные', _settings.where((s) => s['status'] == 'Активный').length.toString()),
-                        _buildStatInfo('В разработке', _settings.where((s) => s['status'] == 'В разработке').length.toString()),
-                        _buildStatInfo('Завершенные', _settings.where((s) => s['status'] == 'Завершенный').length.toString()),
+                        Consumer(
+                          builder: (context, ref, child) {
+                            final settingsAsync = ref.watch(settingsProvider);
+                            return settingsAsync.when(
+                              data: (settings) => Wrap(
+                                spacing: 8,
+                                runSpacing: 4,
+                                children: [
+                                  _buildStatInfo('Активные', settings.where((s) => s.status == 'Активный').length.toString()),
+                                  _buildStatInfo('В разработке', settings.where((s) => s.status == 'В разработке').length.toString()),
+                                  _buildStatInfo('Завершенные', settings.where((s) => s.status == 'Завершенный').length.toString()),
+                                ],
+                              ),
+                              loading: () => const SizedBox.shrink(),
+                              error: (_, __) => const SizedBox.shrink(),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ],
@@ -626,10 +710,10 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
   }
 
   // Карточка сеттинга
-  Widget _buildSettingCard(Map<String, dynamic> setting) {
+  Widget _buildSettingCard(Setting setting) {
     // Цвет статуса
     Color statusColor;
-    switch (setting['status']) {
+    switch (setting.status) {
       case 'Активный':
         statusColor = Colors.green;
         break;
@@ -643,6 +727,29 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
         statusColor = Colors.grey;
     }
 
+    // Иконка и цвет на основе названия
+    IconData settingIcon = Icons.public;
+    Color settingColor = AppColors.primaryBrown;
+    if (setting.name.toLowerCase().contains('кибер') || setting.name.toLowerCase().contains('техно')) {
+      settingIcon = Icons.computer;
+      settingColor = Colors.cyan;
+    } else if (setting.name.toLowerCase().contains('космос')) {
+      settingIcon = Icons.rocket_launch;
+      settingColor = Colors.purple;
+    } else if (setting.name.toLowerCase().contains('тьма') || setting.name.toLowerCase().contains('некро')) {
+      settingIcon = Icons.auto_awesome;
+      settingColor = Colors.deepPurple;
+    } else if (setting.name.toLowerCase().contains('паров') || setting.name.toLowerCase().contains('стимпанк')) {
+      settingIcon = Icons.train;
+      settingColor = Colors.orange;
+    } else if (setting.name.toLowerCase().contains('радиац') || setting.name.toLowerCase().contains('пустош')) {
+      settingIcon = Icons.landscape;
+      settingColor = Colors.green;
+    } else if (setting.name.toLowerCase().contains('истори') || setting.name.toLowerCase().contains('войн')) {
+      settingIcon = Icons.history;
+      settingColor = Colors.red;
+    }
+
     return Container(
       height: 90.0,
       margin: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
@@ -654,7 +761,10 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(10.0),
           onTap: () {
-            context.go('/home/settings_game/${setting['id']}');
+            context.go('/home/settings_game/${setting.id}');
+          },
+          onLongPress: () {
+            _deleteSetting(setting);
           },
           child: Container(
             decoration: BoxDecoration(
@@ -663,8 +773,8 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
                 colors: [
-                  setting['color'].withOpacity(0.12),
-                  setting['color'].withOpacity(0.05),
+                  settingColor.withOpacity(0.12),
+                  settingColor.withOpacity(0.05),
                 ],
               ),
             ),
@@ -676,12 +786,12 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                   Container(
                     padding: const EdgeInsets.all(10.0),
                     decoration: BoxDecoration(
-                      color: setting['color'].withOpacity(0.15),
+                      color: settingColor.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      setting['icon'],
-                      color: setting['color'],
+                      settingIcon,
+                      color: settingColor,
                       size: 22,
                     ),
                   ),
@@ -698,7 +808,7 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                setting['name'],
+                                setting.name,
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
@@ -721,7 +831,7 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                                 ),
                               ),
                               child: Text(
-                                setting['status'],
+                                setting.status,
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: statusColor,
@@ -733,7 +843,7 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          setting['description'],
+                          setting.description,
                           style: TextStyle(
                             fontSize: 12,
                             color: AppColors.darkBrown.withOpacity(0.6),
@@ -750,14 +860,14 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                                 vertical: 2.0,
                               ),
                               decoration: BoxDecoration(
-                                color: setting['color'].withOpacity(0.1),
+                                color: settingColor.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(4.0),
                               ),
                               child: Text(
-                                setting['genre'],
+                                setting.genre,
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: setting['color'],
+                                  color: settingColor,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -780,15 +890,15 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                             children: [
                               Icon(
                                 Icons.people,
-                                color: setting['color'],
+                                color: settingColor,
                                 size: 12,
                               ),
                               const SizedBox(width: 2),
                               Text(
-                                '${setting['players']}',
+                                '${setting.players}',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: setting['color'],
+                                  color: settingColor,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -799,15 +909,15 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                             children: [
                               Icon(
                                 Icons.event,
-                                color: setting['color'],
+                                color: settingColor,
                                 size: 12,
                               ),
                               const SizedBox(width: 2),
                               Text(
-                                '${setting['sessions']}',
+                                '${setting.sessions}',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: setting['color'],
+                                  color: settingColor,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -823,15 +933,15 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                             children: [
                               Icon(
                                 Icons.person,
-                                color: setting['color'],
+                                color: settingColor,
                                 size: 12,
                               ),
                               const SizedBox(width: 2),
                               Text(
-                                '${setting['npcs']}',
+                                '${setting.npcs}',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: setting['color'],
+                                  color: settingColor,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -842,15 +952,15 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                             children: [
                               Icon(
                                 Icons.location_on,
-                                color: setting['color'],
+                                color: settingColor,
                                 size: 12,
                               ),
                               const SizedBox(width: 2),
                               Text(
-                                '${setting['locations']}',
+                                '${setting.locations}',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: setting['color'],
+                                  color: settingColor,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -866,7 +976,7 @@ class _SettingsListScreenState extends ConsumerState<SettingsListScreen> {
                   // Стрелка
                   Icon(
                     Icons.arrow_forward_ios,
-                    color: setting['color'],
+                    color: settingColor,
                     size: 12,
                   ),
                 ],

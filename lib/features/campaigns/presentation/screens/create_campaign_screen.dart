@@ -2,19 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 import '/core/constants/app_colors.dart';
-
-// Временные провайдеры (замените на реальные)
-final settingsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  await Future.delayed(const Duration(milliseconds: 500));
-  return [
-    {'id': '1', 'name': 'Forgotten Realms', 'description': 'Классический мир Dungeons & Dragons'},
-    {'id': '2', 'name': 'Eberron', 'description': 'Магический стимпанк мир'},
-    {'id': '3', 'name': 'Ravnica', 'description': 'Мир по мотивам Magic: The Gathering'},
-    {'id': '4', 'name': 'Custom World', 'description': 'Пользовательский сеттинг'},
-  ];
-});
+import '/core/providers/campaign_providers.dart';
+import '/core/providers/setting_providers.dart';
+import '/core/providers/auth_provider.dart';
+import '/domain/models/campaign.dart';
+import '/domain/models/setting.dart';
 
 class CreateCampaignScreen extends ConsumerStatefulWidget {
   const CreateCampaignScreen({Key? key}) : super(key: key);
@@ -300,7 +295,7 @@ class _CreateCampaignScreenState extends ConsumerState<CreateCampaignScreen> {
     );
   }
 
-  Widget _buildSettingSelector(AsyncValue<List<Map<String, dynamic>>> settingsAsync) {
+  Widget _buildSettingSelector(AsyncValue<List<Setting>> settingsAsync) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -378,22 +373,22 @@ class _CreateCampaignScreenState extends ConsumerState<CreateCampaignScreen> {
               ...settings.map((setting) => InkWell(
                 onTap: () {
                   setState(() {
-                    _selectedSettingId = _selectedSettingId == setting['id'] ? null : setting['id'];
+                    _selectedSettingId = _selectedSettingId == setting.id ? null : setting.id;
                   });
                 },
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: _selectedSettingId == setting['id']
+                    color: _selectedSettingId == setting.id
                         ? AppColors.primaryBrown.withOpacity(0.1)
                         : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: _selectedSettingId == setting['id']
+                      color: _selectedSettingId == setting.id
                           ? AppColors.primaryBrown
                           : AppColors.lightBrown.withOpacity(0.5),
-                      width: _selectedSettingId == setting['id'] ? 2 : 1,
+                      width: _selectedSettingId == setting.id ? 2 : 1,
                     ),
                   ),
                   child: Row(
@@ -402,14 +397,14 @@ class _CreateCampaignScreenState extends ConsumerState<CreateCampaignScreen> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: _selectedSettingId == setting['id']
+                          color: _selectedSettingId == setting.id
                               ? AppColors.primaryBrown
                               : AppColors.lightBrown.withOpacity(0.3),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
                           Icons.public,
-                          color: _selectedSettingId == setting['id']
+                          color: _selectedSettingId == setting.id
                               ? Colors.white
                               : AppColors.darkBrown,
                         ),
@@ -420,10 +415,10 @@ class _CreateCampaignScreenState extends ConsumerState<CreateCampaignScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              setting['name'],
+                              setting.name,
                               style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: _selectedSettingId == setting['id']
+                                fontWeight: _selectedSettingId == setting.id
                                     ? FontWeight.bold
                                     : FontWeight.w500,
                                 color: AppColors.darkBrown,
@@ -431,7 +426,7 @@ class _CreateCampaignScreenState extends ConsumerState<CreateCampaignScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              setting['description'],
+                              setting.description,
                               style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.mediumBrown,
@@ -440,7 +435,7 @@ class _CreateCampaignScreenState extends ConsumerState<CreateCampaignScreen> {
                           ],
                         ),
                       ),
-                      if (_selectedSettingId == setting['id'])
+                      if (_selectedSettingId == setting.id)
                         Icon(
                           Icons.check_circle,
                           color: AppColors.primaryBrown,
@@ -834,43 +829,57 @@ class _CreateCampaignScreenState extends ConsumerState<CreateCampaignScreen> {
     });
 
     try {
-      // TODO: Реализовать создание кампании в базе данных
-      await Future.delayed(const Duration(seconds: 2));
-
-      // Формируем данные кампании
-      final campaignData = {
-        'name': _nameController.text,
-        'description': _descriptionController.text,
-        'settingId': _selectedSettingId,
-        'startDate': _startDate?.toIso8601String(),
-        'frequency': _frequency,
-        'privacy': _privacy,
-        'notes': _notesController.text,
-        'createdAt': DateTime.now().toIso8601String(),
-      };
-
-      // TODO: Отправить данные на сервер
-      print('Создана кампания: $campaignData');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Кампания "${_nameController.text}" создана!'),
-          backgroundColor: AppColors.successGreen,
-        ),
-      );
-
-      // Возвращаемся назад с результатом
-      if (context.mounted) {
-        context.pop({'success': true, 'campaign': campaignData});
+      final authState = ref.read(authProvider);
+      final userName = authState.user?.name ?? 'Неизвестный мастер';
+      
+      // Получаем название сеттинга
+      final settings = await ref.read(settingsProvider.future);
+      Setting? selectedSetting;
+      try {
+        selectedSetting = settings.firstWhere(
+          (s) => s.id == _selectedSettingId,
+        );
+      } catch (_) {
+        selectedSetting = settings.isNotEmpty ? settings.first : null;
       }
+      final settingName = selectedSetting?.name ?? 'Неизвестный сеттинг';
 
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ошибка создания: $e'),
-          backgroundColor: AppColors.errorRed,
-        ),
+      // Создаем кампанию
+      final campaign = Campaign(
+        id: const Uuid().v4(),
+        name: _nameController.text,
+        description: _descriptionController.text,
+        status: 'В планах',
+        system: 'D&D 5e', // Можно добавить выбор системы
+        master: userName,
+        setting: settingName,
+        players: 0,
+        sessions: 0,
+        nextSession: null,
+        lastSession: null,
       );
+
+      // Сохраняем в Hive
+      await ref.read(createCampaignProvider(campaign).future);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Кампания "${campaign.name}" создана!'),
+            backgroundColor: AppColors.successGreen,
+          ),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка создания: $e'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {

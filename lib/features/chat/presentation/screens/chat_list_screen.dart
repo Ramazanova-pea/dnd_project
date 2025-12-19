@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '/core/constants/app_colors.dart';
+import '/core/providers/chat_providers.dart';
+import '/domain/models/chat.dart';
 
-// Временные модели и провайдеры (замените на реальные)
-class Chat {
+// Старая модель Chat (удалить после полной миграции)
+class OldChat {
   final String id;
   final String name;
   final String? description;
@@ -20,7 +22,7 @@ class Chat {
   final DateTime? lastActivity;
   final String? avatarUrl;
 
-  Chat({
+  OldChat({
     required this.id,
     required this.name,
     this.description,
@@ -36,10 +38,10 @@ class Chat {
   });
 }
 
-final chatsProvider = FutureProvider<List<Chat>>((ref) async {
+final oldChatsProvider = FutureProvider<List<OldChat>>((ref) async {
   await Future.delayed(const Duration(seconds: 1));
   return [
-    Chat(
+    OldChat(
       id: '1',
       name: 'Поход за Граалем',
       description: 'Основной чат кампании',
@@ -64,7 +66,7 @@ final chatsProvider = FutureProvider<List<Chat>>((ref) async {
       lastActivity: DateTime.now().subtract(const Duration(minutes: 15)),
       avatarUrl: null,
     ),
-    Chat(
+    OldChat(
       id: '2',
       name: 'Мария',
       type: 'private',
@@ -84,7 +86,7 @@ final chatsProvider = FutureProvider<List<Chat>>((ref) async {
       lastActivity: DateTime.now().subtract(const Duration(hours: 2)),
       avatarUrl: null,
     ),
-    Chat(
+    OldChat(
       id: '3',
       name: 'Обсуждение тактики',
       description: 'Боевые сценарии и стратегии',
@@ -107,7 +109,7 @@ final chatsProvider = FutureProvider<List<Chat>>((ref) async {
       lastActivity: DateTime.now().subtract(const Duration(hours: 5)),
       avatarUrl: null,
     ),
-    Chat(
+    OldChat(
       id: '4',
       name: 'Сокровища и добыча',
       description: 'Распределение находок',
@@ -131,7 +133,7 @@ final chatsProvider = FutureProvider<List<Chat>>((ref) async {
       lastActivity: DateTime.now().subtract(const Duration(days: 1)),
       avatarUrl: null,
     ),
-    Chat(
+    OldChat(
       id: '5',
       name: 'Дмитрий',
       type: 'private',
@@ -151,7 +153,7 @@ final chatsProvider = FutureProvider<List<Chat>>((ref) async {
       lastActivity: DateTime.now().subtract(const Duration(days: 2)),
       avatarUrl: null,
     ),
-    Chat(
+    OldChat(
       id: '6',
       name: 'Общий D&D чат',
       description: 'Обсуждение правил и механик',
@@ -201,7 +203,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final chatsAsync = ref.watch(chatsProvider);
+    final chatsAsync = ref.watch(chatsProvider); // Используем новый провайдер из chat_providers.dart
 
     return Scaffold(
       backgroundColor: AppColors.lightParchment,
@@ -579,7 +581,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
 
                       const SizedBox(height: 4),
 
-                      // Описание или последнее сообщение
+                      // Описание
                       if (chat.description != null)
                         Text(
                           chat.description!,
@@ -589,21 +591,11 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                        )
-                      else if (chat.lastMessage != null)
-                        Text(
-                          '${chat.lastMessage!['senderName']}: ${chat.lastMessage!['text']}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.darkBrown.withOpacity(0.7),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
 
                       const SizedBox(height: 4),
 
-                      // Участники и время
+                      // Тип чата и время
                       Row(
                         children: [
                           Icon(
@@ -613,7 +605,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '${chat.participants.length} участников',
+                            _getChatTypeLabel(chat.type),
                             style: TextStyle(
                               fontSize: 12,
                               color: AppColors.mediumBrown,
@@ -622,9 +614,9 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
 
                           const Spacer(),
 
-                          if (chat.lastMessage != null)
+                          if (chat.lastActivity != null)
                             Text(
-                              _formatTime(chat.lastMessage!['timestamp']),
+                              _formatTime(chat.lastActivity!),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.mediumBrown,
@@ -667,13 +659,6 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
   }
 
   Widget _buildChatAvatar(Chat chat) {
-    if (chat.avatarUrl != null) {
-      return CircleAvatar(
-        radius: 28,
-        backgroundImage: NetworkImage(chat.avatarUrl!),
-      );
-    }
-
     final color = _getChatTypeColor(chat.type);
     final icon = _getChatTypeIcon(chat.type);
 
@@ -725,8 +710,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
       final query = _searchQuery.toLowerCase();
       filtered = filtered.where((chat) =>
       chat.name.toLowerCase().contains(query) ||
-          (chat.description != null && chat.description!.toLowerCase().contains(query)) ||
-          chat.participants.any((p) => p['name'].toLowerCase().contains(query))
+          (chat.description != null && chat.description!.toLowerCase().contains(query))
       ).toList();
     }
 
@@ -735,8 +719,8 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
 
-      final aTime = a.lastMessage?['timestamp'] ?? a.lastActivity;
-      final bTime = b.lastMessage?['timestamp'] ?? b.lastActivity;
+      final aTime = a.lastActivity;
+      final bTime = b.lastActivity;
 
       if (aTime != null && bTime != null) {
         return bTime.compareTo(aTime);
@@ -774,6 +758,19 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         return AppColors.successGreen;
       default:
         return AppColors.mediumBrown;
+    }
+  }
+
+  String _getChatTypeLabel(String type) {
+    switch (type) {
+      case 'campaign':
+        return 'Кампания';
+      case 'group':
+        return 'Группа';
+      case 'private':
+        return 'Приватный';
+      default:
+        return 'Чат';
     }
   }
 
@@ -1029,28 +1026,19 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
     );
   }
 
-  void _deleteChat(Chat chat) {
-    showDialog(
+  Future<void> _deleteChat(Chat chat) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Удалить диалог'),
         content: Text('Вы уверены, что хотите удалить диалог с "${chat.name}"? История сообщений будет удалена.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('ОТМЕНА'),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: Удалить чат из базы данных
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Диалог с "${chat.name}" удален'),
-                  backgroundColor: AppColors.successGreen,
-                ),
-              );
-            },
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.errorRed,
             ),
@@ -1059,6 +1047,18 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         ],
       ),
     );
+
+    if (confirmed == true) {
+      await ref.read(deleteChatProvider(chat.id).future);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Диалог с "${chat.name}" удален'),
+            backgroundColor: AppColors.successGreen,
+          ),
+        );
+      }
+    }
   }
 
   void _leaveChat(Chat chat) {

@@ -1,19 +1,24 @@
 // lib/features/characters/presentation/screens/create_character_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:uuid/uuid.dart';
 
 import '/core/constants/app_colors.dart';
+import '/core/providers/character_providers.dart';
+import '/core/providers/campaign_providers.dart';
+import '/domain/models/character.dart';
 
-class CreateCharacterScreen extends StatefulWidget {
+class CreateCharacterScreen extends ConsumerStatefulWidget {
   const CreateCharacterScreen({super.key});
 
   @override
-  State<CreateCharacterScreen> createState() => _CreateCharacterScreenState();
+  ConsumerState<CreateCharacterScreen> createState() => _CreateCharacterScreenState();
 }
 
-class _CreateCharacterScreenState extends State<CreateCharacterScreen> {
+class _CreateCharacterScreenState extends ConsumerState<CreateCharacterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _playerNameController = TextEditingController();
@@ -55,15 +60,7 @@ class _CreateCharacterScreenState extends State<CreateCharacterScreen> {
     'Изобретатель',
   ];
 
-  final List<String> _campaigns = [
-    'Новая кампания',
-    'Проклятие Страда',
-    'Королевство Под Горой',
-    'Тени Недер-Рада',
-    'Свет и Тьма',
-    'Дыхание Дракона',
-    'Механические Тайны',
-  ];
+  // Список кампаний будет загружаться из провайдера
 
   final List<Color> _avatarColors = [
     Colors.blue,
@@ -116,37 +113,52 @@ class _CreateCharacterScreenState extends State<CreateCharacterScreen> {
     super.dispose();
   }
 
-  void _createCharacter() {
-    if (_formKey.currentState!.validate()) {
-      // TODO: Реализовать сохранение персонажа в базу данных
-      final newCharacter = {
-        'id': DateTime.now().millisecondsSinceEpoch.toString(),
-        'name': _nameController.text,
-        'playerName': _playerNameController.text,
-        'race': _selectedRace,
-        'class': _selectedClass,
-        'level': _level,
-        'campaign': _selectedCampaign,
-        'backstory': _backstoryController.text,
-        'avatarColor': _avatarColors[_selectedColorIndex],
-        'createdAt': DateTime.now().toIso8601String(),
-        'lastPlayed': DateTime.now().toIso8601String(),
-      };
+  Future<void> _createCharacter() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-      // Показать уведомление об успехе
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Персонаж "${_nameController.text}" создан!',
-            style: GoogleFonts.cinzel(),
-          ),
-          backgroundColor: AppColors.successGreen,
-          duration: const Duration(seconds: 2),
-        ),
+    try {
+      // Создаем персонажа
+      final character = Character(
+        id: const Uuid().v4(),
+        name: _nameController.text,
+        race: _selectedRace,
+        characterClass: _selectedClass,
+        level: _level,
+        campaign: _selectedCampaign == 'Новая кампания' ? null : _selectedCampaign,
+        lastPlayed: DateTime.now(),
       );
 
-      // Вернуться на экран списка персонажей
-      context.pop();
+      // Сохраняем в Hive
+      await ref.read(createCharacterProvider(character).future);
+
+      if (mounted) {
+        // Показать уведомление об успехе
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Персонаж "${character.name}" создан!',
+              style: GoogleFonts.cinzel(),
+            ),
+            backgroundColor: AppColors.successGreen,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Ошибка создания персонажа: $e',
+              style: GoogleFonts.cinzel(),
+            ),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+      }
     }
   }
 
@@ -463,6 +475,7 @@ class _CreateCharacterScreenState extends State<CreateCharacterScreen> {
   }
 
   void _showCampaignSelection() {
+    final campaignsAsync = ref.read(campaignsProvider);
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.parchment.withOpacity(0.98),
@@ -471,42 +484,55 @@ class _CreateCharacterScreenState extends State<CreateCharacterScreen> {
       ),
       builder: (context) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Text(
-                  'Выберите кампанию',
-                  style: GoogleFonts.cinzel(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.darkBrown,
-                  ),
-                ),
-              ),
-              ..._campaigns.map((campaign) {
-                return ListTile(
-                  title: Text(
-                    campaign,
-                    style: GoogleFonts.cinzel(
-                      fontSize: 16,
-                      color: AppColors.darkBrown,
+          child: campaignsAsync.when(
+            data: (campaigns) {
+              final campaignNames = ['Новая кампания', ...campaigns.map((c) => c.name)];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text(
+                      'Выберите кампанию',
+                      style: GoogleFonts.cinzel(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.darkBrown,
+                      ),
                     ),
                   ),
-                  trailing: _selectedCampaign == campaign
-                      ? Icon(Icons.check_rounded, color: AppColors.accentGold)
-                      : null,
-                  onTap: () {
-                    setState(() {
-                      _selectedCampaign = campaign;
-                    });
-                    Navigator.pop(context);
-                  },
-                );
-              }),
-              const SizedBox(height: 20),
-            ],
+                  ...campaignNames.map((campaign) {
+                    return ListTile(
+                      title: Text(
+                        campaign,
+                        style: GoogleFonts.cinzel(
+                          fontSize: 16,
+                          color: AppColors.darkBrown,
+                        ),
+                      ),
+                      trailing: _selectedCampaign == campaign
+                          ? Icon(Icons.check_rounded, color: AppColors.accentGold)
+                          : null,
+                      onTap: () {
+                        setState(() {
+                          _selectedCampaign = campaign;
+                        });
+                        Navigator.pop(context);
+                      },
+                    );
+                  }),
+                  const SizedBox(height: 20),
+                ],
+              );
+            },
+            loading: () => const Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(),
+            ),
+            error: (error, stack) => Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text('Ошибка загрузки кампаний: $error'),
+            ),
           ),
         );
       },

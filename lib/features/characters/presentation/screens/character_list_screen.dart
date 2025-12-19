@@ -1,20 +1,25 @@
 // lib/features/characters/presentation/screens/character_list_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '/core/constants/app_colors.dart';
+import '/core/providers/character_providers.dart';
+import '/domain/models/character.dart';
 
-class CharacterListScreen extends StatefulWidget {
+class CharacterListScreen extends ConsumerStatefulWidget {
   const CharacterListScreen({super.key});
 
   @override
-  State<CharacterListScreen> createState() => _CharacterListScreenState();
+  ConsumerState<CharacterListScreen> createState() => _CharacterListScreenState();
 }
 
-class _CharacterListScreenState extends State<CharacterListScreen> {
-  final List<Map<String, dynamic>> _characters = [
+class _CharacterListScreenState extends ConsumerState<CharacterListScreen> {
+  // Старые мок-данные (удалить после полной миграции)
+  // ignore: unused_field
+  final List<Map<String, dynamic>> _mockCharacters = [
     {
       'id': '1',
       'name': 'Арвен Веледа',
@@ -80,34 +85,72 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
   String _sortBy = 'name'; // 'name', 'level', 'lastPlayed'
   String _filterCampaign = 'all';
 
-  List<String> get _campaigns {
-    final campaigns = _characters.map((c) => c['campaign'] as String).toSet().toList();
+  List<String> _getCampaigns(List<Character> characters) {
+    final campaigns = characters
+        .map((c) => c.campaign)
+        .where((c) => c != null && c.isNotEmpty)
+        .cast<String>()
+        .toSet()
+        .toList();
     campaigns.insert(0, 'Все кампании');
     return campaigns;
   }
 
-  List<Map<String, dynamic>> get _filteredCharacters {
-    List<Map<String, dynamic>> filtered = List.from(_characters);
+  List<Character> _filterCharacters(List<Character> characters) {
+    List<Character> filtered = List.from(characters);
 
     // Фильтрация по кампании
     if (_filterCampaign != 'all' && _filterCampaign != 'Все кампании') {
-      filtered = filtered.where((c) => c['campaign'] == _filterCampaign).toList();
+      filtered = filtered.where((c) => c.campaign == _filterCampaign).toList();
     }
 
     // Сортировка
     filtered.sort((a, b) {
       switch (_sortBy) {
         case 'level':
-          return (b['level'] as int).compareTo(a['level'] as int);
+          return b.level.compareTo(a.level);
         case 'lastPlayed':
-          return (b['lastPlayed'] as String).compareTo(a['lastPlayed'] as String);
+          final aDate = a.lastPlayed ?? DateTime(1970);
+          final bDate = b.lastPlayed ?? DateTime(1970);
+          return bDate.compareTo(aDate);
         case 'name':
         default:
-          return (a['name'] as String).compareTo(b['name'] as String);
+          return a.name.compareTo(b.name);
       }
     });
 
     return filtered;
+  }
+
+  /// Удаление персонажа
+  Future<void> _deleteCharacter(Character character) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить персонажа?'),
+        content: Text('Вы уверены, что хотите удалить персонажа "${character.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(deleteCharacterProvider(character.id).future);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Персонаж "${character.name}" удален')),
+        );
+      }
+    }
   }
 
   void _showSortDialog() {
@@ -166,7 +209,8 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
     );
   }
 
-  void _showFilterDialog() {
+  void _showFilterDialog(List<Character> characters) {
+    final campaigns = _getCampaigns(characters);
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.parchment.withOpacity(0.95),
@@ -189,7 +233,7 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              ..._campaigns.map((campaign) {
+              ...campaigns.map((campaign) {
                 final isSelected = _filterCampaign == campaign ||
                     (campaign == 'Все кампании' && _filterCampaign == 'all');
 
@@ -220,7 +264,22 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
     );
   }
 
-  Widget _buildCharacterCard(Map<String, dynamic> character) {
+  Widget _buildCharacterCard(Character character) {
+    // Определяем цвет аватара на основе имени
+    final colors = [
+      Colors.blue,
+      Colors.red,
+      Colors.green,
+      Colors.purple,
+      Colors.orange,
+      Colors.teal,
+      Colors.pink,
+      Colors.brown,
+      Colors.indigo,
+      Colors.cyan,
+    ];
+    final avatarColor = colors[character.name.hashCode.abs() % colors.length];
+
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -232,7 +291,10 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          context.go('/home/characters/${character['id']}');
+          context.go('/home/characters/${character.id}');
+        },
+        onLongPress: () {
+          _deleteCharacter(character);
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -243,20 +305,20 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  color: (character['avatarColor'] as Color).withOpacity(0.1),
+                  color: avatarColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(30),
                   border: Border.all(
-                    color: (character['avatarColor'] as Color).withOpacity(0.3),
+                    color: avatarColor.withOpacity(0.3),
                     width: 2,
                   ),
                 ),
                 child: Center(
                   child: Text(
-                    character['name'].toString().substring(0, 1),
+                    character.name.isNotEmpty ? character.name.substring(0, 1).toUpperCase() : '?',
                     style: GoogleFonts.cinzel(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
-                      color: character['avatarColor'] as Color,
+                      color: avatarColor,
                     ),
                   ),
                 ),
@@ -270,7 +332,7 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      character['name'] as String,
+                      character.name,
                       style: GoogleFonts.cinzel(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -283,7 +345,7 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
                     const SizedBox(height: 4),
 
                     Text(
-                      '${character['race']} • ${character['class']}',
+                      '${character.race} • ${character.characterClass}',
                       style: GoogleFonts.cinzel(
                         fontSize: 14,
                         color: AppColors.woodBrown,
@@ -304,7 +366,7 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
                             ),
                           ),
                           child: Text(
-                            'Ур. ${character['level']}',
+                            'Ур. ${character.level}',
                             style: GoogleFonts.cinzel(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -315,18 +377,19 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
 
                         const SizedBox(width: 8),
 
-                        Expanded(
-                          child: Text(
-                            character['campaign'] as String,
-                            style: GoogleFonts.cinzel(
-                              fontSize: 12,
-                              color: AppColors.woodBrown.withOpacity(0.8),
-                              fontStyle: FontStyle.italic,
+                        if (character.campaign != null && character.campaign!.isNotEmpty)
+                          Expanded(
+                            child: Text(
+                              character.campaign!,
+                              style: GoogleFonts.cinzel(
+                                fontSize: 12,
+                                color: AppColors.woodBrown.withOpacity(0.8),
+                                fontStyle: FontStyle.italic,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
                       ],
                     ),
                   ],
@@ -352,7 +415,7 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
     );
   }
 
-  void _showCharacterOptions(Map<String, dynamic> character) {
+  void _showCharacterOptions(Character character) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.parchment.withOpacity(0.95),
@@ -367,7 +430,7 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Text(
-                  character['name'] as String,
+                  character.name,
                   style: GoogleFonts.cinzel(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
@@ -384,7 +447,7 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
                 'Просмотреть',
                     () {
                   Navigator.pop(context);
-                  context.go('/home/characters/${character['id']}');
+                  context.go('/home/characters/${character.id}');
                 },
               ),
 
@@ -393,7 +456,7 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
                 'Редактировать',
                     () {
                   Navigator.pop(context);
-                  context.go('/home/characters/${character['id']}/edit');
+                  context.go('/home/characters/${character.id}/edit');
                 },
               ),
 
@@ -413,7 +476,7 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
                 'Удалить',
                     () {
                   Navigator.pop(context);
-                  _showDeleteDialog(character);
+                  _deleteCharacter(character);
                 },
                 isDestructive: true,
               ),
@@ -443,78 +506,16 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
     );
   }
 
-  void _duplicateCharacter(Map<String, dynamic> character) {
+  void _duplicateCharacter(Character character) {
     // TODO: Реализовать копирование персонажа
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Создана копия ${character['name']}',
+          'Создана копия ${character.name}',
           style: GoogleFonts.cinzel(),
         ),
         backgroundColor: AppColors.successGreen,
       ),
-    );
-  }
-
-  void _showDeleteDialog(Map<String, dynamic> character) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColors.parchment,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            'Удалить персонажа?',
-            style: GoogleFonts.cinzel(
-              fontWeight: FontWeight.w700,
-              color: AppColors.darkBrown,
-            ),
-          ),
-          content: Text(
-            'Вы уверены, что хотите удалить "${character['name']}"? Это действие нельзя отменить.',
-            style: GoogleFonts.cinzel(
-              color: AppColors.woodBrown,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Отмена',
-                style: GoogleFonts.cinzel(
-                  color: AppColors.woodBrown,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                setState(() {
-                  _characters.removeWhere((c) => c['id'] == character['id']);
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Персонаж "${character['name']}" удален',
-                      style: GoogleFonts.cinzel(),
-                    ),
-                    backgroundColor: AppColors.errorRed,
-                  ),
-                );
-              },
-              child: Text(
-                'Удалить',
-                style: GoogleFonts.cinzel(
-                  color: AppColors.errorRed,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 
@@ -538,13 +539,22 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
               ),
             ),
             actions: [
-              IconButton(
-                onPressed: _showFilterDialog,
-                icon: Icon(
-                  Icons.filter_list_rounded,
-                  color: AppColors.darkBrown,
-                ),
-                tooltip: 'Фильтровать',
+              Consumer(
+                builder: (context, ref, child) {
+                  final charactersAsync = ref.watch(charactersProvider);
+                  return charactersAsync.when(
+                    data: (characters) => IconButton(
+                      onPressed: () => _showFilterDialog(characters),
+                      icon: Icon(
+                        Icons.filter_list_rounded,
+                        color: AppColors.darkBrown,
+                      ),
+                      tooltip: 'Фильтровать',
+                    ),
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                  );
+                },
               ),
               IconButton(
                 onPressed: _showSortDialog,
@@ -557,102 +567,110 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
             ],
           ),
 
-          // Информация о фильтрах
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  if (_filterCampaign != 'all')
-                    Chip(
-                      label: Text(
-                        _filterCampaign == 'Все кампании' ? 'Все кампании' : _filterCampaign,
-                        style: GoogleFonts.cinzel(fontSize: 12),
-                      ),
-                      backgroundColor: AppColors.primaryBrown.withOpacity(0.1),
-                      side: BorderSide(color: AppColors.primaryBrown.withOpacity(0.3)),
-                      onDeleted: () {
-                        setState(() {
-                          _filterCampaign = 'all';
-                        });
-                      },
-                    ),
-                  const Spacer(),
-                  Text(
-                    'Всего: ${_filteredCharacters.length}',
-                    style: GoogleFonts.cinzel(
-                      fontSize: 14,
-                      color: AppColors.woodBrown,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Список персонажей
-          if (_filteredCharacters.isNotEmpty)
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                  return _buildCharacterCard(_filteredCharacters[index]);
-                },
-                childCount: _filteredCharacters.length,
-              ),
-            )
-          else
-            SliverFillRemaining(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.person_outline_rounded,
-                    size: 80,
-                    color: AppColors.lightBrown.withOpacity(0.5),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Нет персонажей',
-                    style: GoogleFonts.cinzel(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.darkBrown,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _filterCampaign == 'all'
-                        ? 'Создайте своего первого персонажа!'
-                        : 'Нет персонажей в этой кампании',
-                    style: GoogleFonts.cinzel(
-                      fontSize: 14,
-                      color: AppColors.woodBrown,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  if (_filterCampaign != 'all')
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _filterCampaign = 'all';
-                        });
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryBrown,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+          // Информация о фильтрах и список персонажей
+          Consumer(
+            builder: (context, ref, child) {
+              final charactersAsync = ref.watch(charactersProvider);
+              return charactersAsync.when(
+                data: (characters) {
+                  final filtered = _filterCharacters(characters);
+                  return SliverList(
+                    delegate: SliverChildListDelegate([
+                      // Информация о фильтрах
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          children: [
+                            if (_filterCampaign != 'all')
+                              Chip(
+                                label: Text(
+                                  _filterCampaign == 'Все кампании' ? 'Все кампании' : _filterCampaign,
+                                  style: GoogleFonts.cinzel(fontSize: 12),
+                                ),
+                                backgroundColor: AppColors.primaryBrown.withOpacity(0.1),
+                                side: BorderSide(color: AppColors.primaryBrown.withOpacity(0.3)),
+                                onDeleted: () {
+                                  setState(() {
+                                    _filterCampaign = 'all';
+                                  });
+                                },
+                              ),
+                            const Spacer(),
+                            Text(
+                              'Всего: ${filtered.length}',
+                              style: GoogleFonts.cinzel(
+                                fontSize: 14,
+                                color: AppColors.woodBrown,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Text(
-                        'Показать всех',
-                        style: GoogleFonts.cinzel(fontSize: 14),
-                      ),
+                      // Список персонажей
+                      if (filtered.isNotEmpty)
+                        ...filtered.map((character) => _buildCharacterCard(character))
+                      else
+                        Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.person_outline_rounded,
+                                size: 80,
+                                color: AppColors.lightBrown.withOpacity(0.5),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Нет персонажей',
+                                style: GoogleFonts.cinzel(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.darkBrown,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _filterCampaign == 'all'
+                                    ? 'Создайте своего первого персонажа!'
+                                    : 'Нет персонажей в этой кампании',
+                                style: GoogleFonts.cinzel(
+                                  fontSize: 14,
+                                  color: AppColors.woodBrown,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                    ]),
+                  );
+                },
+                loading: () => SliverFillRemaining(
+                  child: Center(
+                    child: CircularProgressIndicator(color: AppColors.primaryBrown),
+                  ),
+                ),
+                error: (error, stack) => SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red, size: 48),
+                        const SizedBox(height: 16),
+                        Text('Ошибка загрузки персонажей', style: GoogleFonts.cinzel(color: AppColors.darkBrown)),
+                        const SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: () => ref.invalidate(charactersProvider),
+                          child: const Text('Повторить'),
+                        ),
+                      ],
                     ),
-                ],
-              ),
-            ),
+                  ),
+                ),
+              );
+            },
+          ),
         ],
       ),
 
